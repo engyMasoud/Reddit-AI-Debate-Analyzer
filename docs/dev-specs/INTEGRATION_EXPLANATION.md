@@ -14,7 +14,7 @@ The development specifications for **US1 (Inline AI Reasoning Summary)** and **U
 
 - **US1** defines the foundational `AIAnalysisService` with core methods:
   - `extractClaims(text)`: Parse main arguments from text
-  - `extractEvidence(text)`: Identify supporting evidence  
+  - `extractEvidence(text)`: Identify supporting evidence
   - `evaluateCoherence(claims, evidence)`: Score reasoning quality
   - `generateSummary(analysis)`: Create concise summary
 
@@ -30,6 +30,7 @@ The development specifications for **US1 (Inline AI Reasoning Summary)** and **U
   - In Architecture Diagram: Notes "Uses: AIAnalysisService (shared)"
 
 **Accommodation Strategy:**
+
 - US1 spec designed `AIAnalysisService` with generic, reusable methods
 - No need to duplicate AI processing logic across three features
 - Reduces API call costs by ~33% through shared batch processing
@@ -58,12 +59,14 @@ The development specifications for **US1 (Inline AI Reasoning Summary)** and **U
   - Stores draft feedback results for 1 hour (shorter TTL, frequent updates)
 
 **Accommodation Strategy:**
+
 - US1 created abstraction layer for Redis operations
 - US2 extends with longer TTL strategy for thread-level data
 - US3 can reuse same interface with different TTL configuration
 - Unified error handling and connection pooling benefits all three
 
 **Redis Configuration Accommodations:**
+
 ```
 US1 TTL: 24 hours (86400 seconds)  - Comment summaries, stable content
 US2 TTL: 48 hours (172800 seconds) - Thread summaries, longer retention for moderators
@@ -111,6 +114,7 @@ All use same Redis instance with per-key TTL settings
 ### Modifications to Backend Infrastructure
 
 **Original US1 & US2 Stack:**
+
 ```
 Backend: Node.js 18.x LTS, Express.js 4.x
 Async Jobs: Bull 4.x (for background processing)
@@ -146,16 +150,19 @@ Cache: Redis 7.x
 ### How US1 & US2 Diagrams Explicitly Show US3 Support
 
 **US1 Architecture:**
+
 - Shows single service path for comment analysis
 - Establishes foundation for generic `AIAnalysisService`
 - No WebSocket layer (REST only)
 
 **US2 Architecture:**
+
 - **Notes parallel processing potential**: "Positions are clustered, evidence extracted, quality scored"
 - Explicitly shows "Uses: AIAnalysisService (shared with US1)"
 - Demonstrates batch processing pattern that US3 leverages for debounced requests
 
 **US3 Architecture:**
+
 - **Adds WebSocket layer** alongside HTTP:
   ```
   │ WebSocket + HTTP
@@ -180,6 +187,7 @@ Cache: Redis 7.x
 ### How Authentication & Rate Limiting Accommodate US3
 
 **Shared Across All Three:**
+
 - **Auth Header**: `Authorization: Bearer {jwt_token}` on all endpoints
 - **Database**: Same PostgreSQL for all user/auth data
 - **User Sessions**: JWT token validation for API access control
@@ -190,7 +198,7 @@ Cache: Redis 7.x
    - US1: 100 requests per minute per user (on-demand summary retrieval)
    - US2: Implicit rate limiting via moderator role restriction
    - US3: **100 requests per minute per user** (aggressive buffering)
-   
+
    **Accommodation**: Per-user rate limiting applies uniformly across all features, preventing one feature from starving others.
 
 2. **WebSocket Authentication**:
@@ -205,19 +213,21 @@ Cache: Redis 7.x
 ### Shared Service Failure Points
 
 **US2 Explicitly Addresses US3 Integration Risk (Risks to Completion #7):**
+
 ```
 "Integration Complexity: US2 depends on US1 services (AI, cache)"
 
-Mitigation: 
+Mitigation:
 - Design shared service interfaces early
 - Test dependency chain thoroughly
 ```
 
 **US3 Explicitly Addresses Shared Services Risk (Risks to Completion #8):**
+
 ```
 "Dependency on AIAnalysisService: Shared with US1/US2"
 
-Mitigation: 
+Mitigation:
 - Test integration thoroughly
 - Design fallback for service failure
 ```
@@ -233,14 +243,14 @@ Mitigation:
    - US1: Comment summary fails → Show "Failed to load" message
    - US2: Thread analysis fails → Show cached summary or create new job
    - US3: Draft feedback fails → Graceful degradation, no feedback yet
-   
+
    **Shared logic**: Fallback patterns consistent across services
 
 3. **Scalability Accommodations**:
    - US1: Redis cache (24h TTL) handles comment popularity spikes
    - US2: Bull job queue handles batch processing of large threads
    - US3: WebSocket + Redis adapter handles concurrent users
-   
+
    **Design principle**: Each feature scales independently while sharing backend infrastructure
 
 ---
@@ -272,18 +282,21 @@ Mitigation:
 ```
 
 **How US1 Prepared for US2 & US3:**
+
 1. Designed `AIAnalysisService` as injectable dependency
 2. Designed `CacheService` with generic key/value interface
 3. Established error handling patterns for shared services
 4. Documented service contracts for reuse
 
 **How US2 Extended for US3:**
+
 1. Added clustering/grouping patterns (positions from claims)
 2. Demonstrated batch processing of multiple items
 3. Showed how to aggregate results from parallel detectors
 4. Explicitly documented shared service dependencies
 
 **How US3 Leverages Both:**
+
 1. Uses `AIAnalysisService` for claim/evidence extraction
 2. Uses `CacheService` for feedback result caching
 3. Adds WebSocket layer for delivery mechanism
@@ -293,28 +306,30 @@ Mitigation:
 
 ## 8. Summary of Key Modifications
 
-| Aspect | US1 Foundation | US2 Modification | US3 Accommodation |
-|--------|---|---|---|
-| **Shared Services** | Defines AIAnalysisService, CacheService | Explicitly uses and documents dependency | Reuses both, adds documentation |
-| **WebSocket** | None (REST only) | None (REST only) | Added Socket.IO 4.x to stack |
-| **Caching Strategy** | 24h TTL for comments | 48h TTL for threads | 1h TTL for drafts, all use same Redis |
-| **Database** | Comment-scoped tables | Thread-scoped tables | User-scoped tables, same PostgreSQL |
-| **Job Queue** | Background summaries | Batch thread analysis | Draft analysis, all use Bull |
-| **Concurrency** | Low (per comment) | Medium (per thread) | High (per user, continuous WebSocket) |
-| **Risk Documentation** | Generic service failures | Lists US1 dependency | Lists US1/US2 dependency |
-| **Rate Limiting** | 100 req/min per user | Implicit via role | 100 req/min per user |
-| **Authentication** | JWT tokens | JWT tokens | JWT tokens + WebSocket upgrade |
+| Aspect                 | US1 Foundation                          | US2 Modification                         | US3 Accommodation                     |
+| ---------------------- | --------------------------------------- | ---------------------------------------- | ------------------------------------- |
+| **Shared Services**    | Defines AIAnalysisService, CacheService | Explicitly uses and documents dependency | Reuses both, adds documentation       |
+| **WebSocket**          | None (REST only)                        | None (REST only)                         | Added Socket.IO 4.x to stack          |
+| **Caching Strategy**   | 24h TTL for comments                    | 48h TTL for threads                      | 1h TTL for drafts, all use same Redis |
+| **Database**           | Comment-scoped tables                   | Thread-scoped tables                     | User-scoped tables, same PostgreSQL   |
+| **Job Queue**          | Background summaries                    | Batch thread analysis                    | Draft analysis, all use Bull          |
+| **Concurrency**        | Low (per comment)                       | Medium (per thread)                      | High (per user, continuous WebSocket) |
+| **Risk Documentation** | Generic service failures                | Lists US1 dependency                     | Lists US1/US2 dependency              |
+| **Rate Limiting**      | 100 req/min per user                    | Implicit via role                        | 100 req/min per user                  |
+| **Authentication**     | JWT tokens                              | JWT tokens                               | JWT tokens + WebSocket upgrade        |
 
 ---
 
 ## 9. Design Principles That Enable US3 Integration
 
 ### 1. **Dependency Injection Pattern**
+
 - Services depend on abstractions, not concrete implementations
 - Example: `WritingFeedbackService` receives `AIAnalysisService` as parameter
 - Allows testing with mocks, swapping implementations
 
 ### 2. **Shared Infrastructure, Separate Features**
+
 - All three features run on same Node.js process
 - Each has isolated database tables (no key conflicts)
 - Redis namespace separation via key prefixes:
@@ -323,12 +338,14 @@ Mitigation:
   - `draft_feedback:{draftHash}`
 
 ### 3. **Graceful Degradation**
+
 - Each feature can fail independently
 - US1 summary generator fails → user sees "Summary unavailable"
 - US3 feedback fails → user can still submit comment
 - No cascading failures across features
 
 ### 4. **Scalability Through Async Processing**
+
 - US1: Bull queue for background comment analysis
 - US2: Bull queue for batch thread processing
 - US3: Bull queue for background draft analysis + real-time WebSocket delivery
@@ -354,7 +371,7 @@ Phase 2: Deploy US2 (Depends on US1)
 
 Phase 3: Deploy US3 (Depends on US1 & US2)
 ├─ Reuse AIAnalysisService
-├─ Reuse CacheService  
+├─ Reuse CacheService
 ├─ Add Socket.IO infrastructure
 ├─ Add WritingFeedbackService
 └─ Test real-time feedback with both US1 & US2 services running
@@ -362,6 +379,7 @@ Phase 3: Deploy US3 (Depends on US1 & US2)
 ```
 
 **Benefits of This Order:**
+
 1. US1 tests core AI/cache infrastructure
 2. US2 validates service sharing and error handling
 3. US3 adds WebSocket layer on proven foundation
