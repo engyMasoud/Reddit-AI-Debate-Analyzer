@@ -8,6 +8,9 @@ This document specifies the development of the Real-Time Writing Feedback featur
 
 **T-Shirt Size**: Medium
 
+Rationale: This aspect extends the AI infrastructure of Dev Spec 1. Rather than summarizing posts that were written, it checks comments made and removes them to enhance the quality of the debate at the origin.
+
+
 ---
 
 ## Architecture Diagram
@@ -100,6 +103,8 @@ This document specifies the development of the Real-Time Writing Feedback featur
 7. Client highlights problematic areas inline with explanations
 8. User can modify draft and trigger new feedback analysis
 
+Rationale: It is based on AIAnalyzer and OpenAIClient of Dev Spec 1. It does not need AI integration logic duplication.
+
 ---
 
 ## Class Diagram
@@ -181,6 +186,8 @@ This document specifies the development of the Real-Time Writing Feedback featur
                                     └─────────────────┘  └───────────────────┘  └──────────────────────┘
 ```
 
+Rationale: We do not introduce a new AI class, but extend AIAnalyzer. This is a continuity of architecture.
+
 ---
 
 ## List of Classes
@@ -203,6 +210,8 @@ This document specifies the development of the Real-Time Writing Feedback featur
 | `CitationParser`            | utils        | Extracts citations and source references         |
 | `SentenceGraphBuilder`      | utils        | Constructs argument dependency graph             |
 | `NgramAnalyzer`             | utils        | N-gram analysis for repetition detection         |
+
+Rationale: Each class isolates responsibility, ensuring maintainability.
 
 ---
 
@@ -276,6 +285,8 @@ This document specifies the development of the Real-Time Writing Feedback featur
      │  Feedback Highlights         │
      └──────────────────────────────┘
 ```
+
+Rationale: Clearly defines UI and backend transitions.
 
 ---
 
@@ -403,6 +414,8 @@ User Types in Comment Composer
          END
 ```
 
+Rationale: Debouncing prevents excessive API usage.
+
 ---
 
 ## Development Risks and Failures
@@ -419,6 +432,8 @@ User Types in Comment Composer
 | **User Privacy**               | Low        | Draft text sent to 3rd-party AI service                    | Use OpenAI enterprise DPA, offer local analysis option          |
 | **Usability Overload**         | Medium     | Too many feedback items make panel unreadable              | Limit to top 3-5 critical issues, group by type                 |
 | **Draft Data Leakage**         | Low        | Unfinished draft comments stored permanently               | Clear drafts after 30 days, allow manual deletion               |
+
+Rationale: Real-time features introduce performance and cost risks.
 
 ---
 
@@ -440,6 +455,8 @@ User Types in Comment Composer
 | **Graph Analysis** | dependency-graph   | Latest   | Build argument relationship graph              |
 | **Testing**        | Jest               | 29.x     | Unit and integration tests                     |
 | **Async Tasks**    | Bull               | 4.x      | Background job processing for offline analysis |
+
+Rationale: Reuses stack from Dev Spec 1 to ensure consistency.
 
 ---
 
@@ -642,6 +659,8 @@ socket.on('draft:saved', (data: {
 }));
 ```
 
+Rationale: These RESTful endpoints allow scalable extension of analytics features.
+
 ---
 
 ## Public Interfaces
@@ -720,6 +739,8 @@ interface IUnsupportedClaimsDetector {
 }
 ```
 
+Rationale: A structured JSON response ensures flexibility in UI rendering.
+
 ---
 
 ## Data Schemas
@@ -786,6 +807,7 @@ Example key: draft_feedback:abc123def456
   "generatedAt": "2026-02-11T15:45:00Z"
 }
 ```
+Rationale: Stores evaluation logs for auditing and improvement.
 
 ---
 
@@ -826,6 +848,8 @@ Example key: draft_feedback:abc123def456
 - **AI Transparency**: Clearly indicate feedback is "AI-generated" in UI
 - **Security**: Regular security audits, dependency scanning
 
+Rationale: Protects user data and prevents abuse.
+
 ---
 
 ## Risks to Completion
@@ -859,3 +883,18 @@ Example key: draft_feedback:abc123def456
 
 10. **Draft Storage Complexity**: Managing draft lifecycle and cleanup
     - _Mitigation_: Database triggers for auto-delete, cache invalidation on edit
+   
+Rationale: Real-time features are harder to optimize than batch features.
+
+---
+
+## Modification to Existing Development Specifications
+This Real-Time Writing Feedback option (Development Specification 3) leverages the foundational AIAnalysisService defined in Development Specification 1. To maintain architectural consistency, we consumed this shared service within a new WritingFeedbackService, avoiding the creation of a redundant AI processing pipeline.
+
+Specifically, the AIAnalysisService claims extraction logic is reused to support two distinct modes: post-submission summary generation (for US1) and real-time draft analysis (for US3). This implementation introduces a debounced (500ms) analysis workflow via Socket.IO, allowing the system to process partial text input efficiently without triggering the full thread-level analysis pipeline required for US1.
+
+The existing OpenAI integration (encapsulated within AIAnalysisService) was utilized as the single source of truth for LLM interaction, preventing logic replication. Specialized detection for circular logic and weak evidence was implemented in separate utility classes (CircularLogicDetector, WeakEvidenceDetector) that consume the shared AI outputs.
+
+Data-wise, the database schema was extended cleanly by introducing dedicated drafts and feedback_logs tables, rather than modifying the existing reasoning_summaries entity. This approach ensures that temporary draft data remains isolated from permanent thread summaries.
+
+In the architecture, the new WritingFeedbackService operates alongside the existing ReasoningSummaryService within the same backend layer. This ensures modular separation of concerns while allowing both features to share core infrastructure, such as the CacheService and AIAnalysisService.
