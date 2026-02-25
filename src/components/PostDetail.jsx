@@ -17,6 +17,16 @@ export default function PostDetail() {
     }
   }, [selectedPost, handleClose]);
 
+  // Lock body scroll when modal is open to prevent background scrolling on mobile
+  useEffect(() => {
+    if (selectedPost) {
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = '';
+      };
+    }
+  }, [selectedPost]);
+
   if (!selectedPost) return null;
 
   // Always read fresh post data from the posts array so vote counts stay current
@@ -53,7 +63,7 @@ export default function PostDetail() {
 
       {/* Modal */}
       <div
-        className="fixed inset-0 z-50 flex items-start justify-center p-0 sm:p-4 overflow-y-auto sm:pt-8"
+        className="fixed inset-0 z-50 flex items-start justify-center p-0 sm:p-4 overflow-y-auto overscroll-contain sm:pt-8"
         role="dialog"
         aria-modal="true"
         aria-label={`Post: ${post.title}`}
@@ -63,7 +73,7 @@ export default function PostDetail() {
           onClick={(e) => e.stopPropagation()}
         >
           {/* Main Content */}
-          <div className="flex-1 max-h-screen sm:max-h-[90vh] overflow-y-auto">
+          <div className="flex-1 sm:max-h-[90vh] sm:overflow-y-auto">
             {/* Back Button & Header */}
             <div className="sticky top-0 bg-reddit-light border-b border-reddit-border p-3 sm:p-4 flex items-center gap-2 sm:gap-3 z-10">
               <button
