@@ -31,7 +31,7 @@ export default function RightSidebar() {
           </button>
 
           <button className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-full border border-gray-300 hover:bg-gray-50 transition min-h-[44px] font-semibold text-sm">
-            <Mail size={18} />
+            <Mail size={18} aria-hidden="true" />
             Continue with Email
           </button>
 
@@ -51,7 +51,7 @@ export default function RightSidebar() {
       {/* Trending Section */}
       <div className="bg-reddit-light rounded-lg border border-reddit-border p-4">
         <div className="flex items-center gap-2 mb-4">
-          <Flame size={20} className="text-orange-500" />
+          <Flame size={20} className="text-orange-500" aria-hidden="true" />
           <h3 className="font-bold text-reddit-dark">Trending</h3>
         </div>
 
@@ -83,7 +83,7 @@ export default function RightSidebar() {
       {/* Suggested Communities */}
       <div className="bg-reddit-light rounded-lg border border-reddit-border p-4">
         <div className="flex items-center gap-2 mb-4">
-          <TrendingUp size={20} className="text-blue-500" />
+          <TrendingUp size={20} className="text-blue-500" aria-hidden="true" />
           <h3 className="font-bold text-reddit-dark">Popular Communities</h3>
         </div>
 
@@ -107,6 +107,7 @@ export default function RightSidebar() {
               <button
                 onClick={() => joinSubreddit(subreddit.id)}
                 className="bg-blue-200 text-blue-600 px-3 py-1 rounded-full text-xs font-semibold hover:bg-blue-300 transition whitespace-nowrap flex-shrink-0 min-h-[36px] flex items-center"
+                aria-label={`Join r/${subreddit.name}`}
               >
                 Join
               </button>
@@ -122,7 +123,7 @@ export default function RightSidebar() {
       {/* Reddit Pro Section */}
       <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-lg border-2 border-orange-200 p-4">
         <div className="flex items-center gap-2 mb-2">
-          <PieChart size={20} className="text-orange-600" />
+          <PieChart size={20} className="text-orange-600" aria-hidden="true" />
           <h3 className="font-bold text-orange-700">Reddit Pro</h3>
           <span className="text-xs bg-yellow-200 text-orange-700 px-2 py-0.5 rounded-full font-bold">
             BETA

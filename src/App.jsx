@@ -14,6 +14,11 @@ function App() {
   return (
     <RedditProvider>
       <div className="flex flex-col h-screen bg-reddit-page">
+        {/* WCAG: Skip-to-content link for keyboard users */}
+        <a href="#main-content" className="skip-link">
+          Skip to main content
+        </a>
+
         <Navbar onMenuClick={() => setMobileMenuOpen(!mobileMenuOpen)} />
         
         <div className="flex flex-1 overflow-hidden">
@@ -23,19 +28,19 @@ function App() {
           )}
 
           {/* Desktop Sidebar */}
-          <div className="hidden md:block w-64 border-r border-reddit-border overflow-y-auto">
+          <aside className="hidden md:block w-64 border-r border-reddit-border overflow-y-auto" aria-label="Navigation sidebar">
             <Sidebar />
-          </div>
+          </aside>
 
           {/* Main Feed */}
-          <div className="flex-1 overflow-y-auto">
+          <main id="main-content" className="flex-1 overflow-y-auto" role="main">
             <MainFeed />
-          </div>
+          </main>
 
           {/* Right Sidebar - Desktop only */}
-          <div className="hidden lg:block w-80 border-l border-reddit-border overflow-y-auto">
+          <aside className="hidden lg:block w-80 border-l border-reddit-border overflow-y-auto" aria-label="Trending and communities">
             <RightSidebar />
-          </div>
+          </aside>
         </div>
 
         {/* Post Detail Modal */}

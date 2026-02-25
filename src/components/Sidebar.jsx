@@ -69,8 +69,8 @@ export default function Sidebar() {
         <div className="mb-6">
           <div className="flex items-center justify-between mb-3 px-1">
             <h3 className="text-xs font-bold text-reddit-gray uppercase">Communities</h3>
-            <button className="p-1 hover:bg-gray-200 rounded-full min-h-[40px] min-w-[40px] flex items-center justify-center" title="Add community">
-              <Plus size={18} />
+            <button className="p-1 hover:bg-gray-200 rounded-full min-h-[40px] min-w-[40px] flex items-center justify-center" aria-label="Add community">
+              <Plus size={18} aria-hidden="true" />
             </button>
           </div>
 
@@ -79,16 +79,18 @@ export default function Sidebar() {
               const isSelected = selectedSubreddit === subreddit.name;
 
               return (
-                <div
+                <button
                   key={subreddit.id}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition min-h-[40px] ${
+                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition min-h-[40px] ${
                     isSelected ? 'bg-gray-200 font-semibold' : 'hover:bg-gray-100'
                   }`}
                   onClick={() => handleSubredditClick(subreddit.name)}
+                  aria-label={`Community r/${subreddit.name}`}
+                  aria-current={isSelected ? 'true' : undefined}
                 >
-                  <span className="text-lg flex-shrink-0">{subreddit.icon}</span>
+                  <span className="text-lg flex-shrink-0" aria-hidden="true">{subreddit.icon}</span>
                   <span className="text-sm flex-1 truncate">r/{subreddit.name}</span>
-                </div>
+                </button>
               );
             })}
           </div>

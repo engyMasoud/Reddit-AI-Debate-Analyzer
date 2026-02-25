@@ -1,9 +1,9 @@
 import { useContext } from 'react';
-import { ThumbsUp, ThumbsDown, MessageCircle, Share, MoreVertical } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, MessageCircle, Share, MoreVertical, Brain } from 'lucide-react';
 import { RedditContext } from '../context/RedditContext';
 
 export default function PostCard({ post }) {
-  const { handleVote, handleComment, setSelectedPost, userVotes } = useContext(RedditContext);
+  const { handleVote, handleComment, setSelectedPost, userVotes, getPostComments } = useContext(RedditContext);
 
   const formatDate = (date) => {
     const now = new Date();
@@ -24,9 +24,16 @@ export default function PostCard({ post }) {
 
   const userVote = userVotes[`post-${post.id}`];
   const upvoteScore = post.upvotes > 1000 ? `${(post.upvotes / 1000).toFixed(1)}k` : post.upvotes;
+  
+  // Check if this post has comments with AI summaries
+  const postComments = getPostComments(post.id);
+  const aiAnalyzedCount = postComments.filter(c => c.aiSummary).length;
 
   return (
-    <div className="bg-reddit-light border border-reddit-border rounded-lg hover:border-gray-400 transition overflow-hidden cursor-pointer group mb-3 hover:shadow-md">
+    <article
+      className="bg-reddit-light border border-reddit-border rounded-lg hover:border-gray-400 transition overflow-hidden cursor-pointer group mb-3 hover:shadow-md"
+      aria-label={`Post: ${post.title} by ${post.author} in r/${post.subreddit}`}
+    >
       <div className="flex flex-col sm:flex-row min-h-[180px]">
         {/* Vote Section - Desktop */}
         <div className="hidden sm:flex flex-col items-center gap-2 bg-gray-50 px-3 py-4 min-w-[56px] flex-shrink-0">
@@ -40,13 +47,14 @@ export default function PostCard({ post }) {
                 ? 'bg-orange-200 text-orange-500'
                 : 'hover:bg-orange-100 text-reddit-gray hover:text-orange-500'
             }`}
-            title="Upvote"
+            aria-label={`Upvote, currently ${post.upvotes} upvotes`}
+            aria-pressed={userVote === 'up'}
           >
-            <ThumbsUp size={18} fill={userVote === 'up' ? 'currentColor' : 'none'} />
+            <ThumbsUp size={18} fill={userVote === 'up' ? 'currentColor' : 'none'} aria-hidden="true" />
           </button>
           <span className={`text-xs font-bold text-center min-h-[24px] ${
             userVote === 'up' ? 'text-orange-500' : userVote === 'down' ? 'text-blue-500' : 'text-reddit-gray'
-          }`}>
+          }`} aria-label={`${upvoteScore} votes`}>
             {upvoteScore}
           </span>
           <button
@@ -59,9 +67,10 @@ export default function PostCard({ post }) {
                 ? 'bg-blue-200 text-blue-500'
                 : 'hover:bg-blue-100 text-reddit-gray hover:text-blue-500'
             }`}
-            title="Downvote"
+            aria-label={`Downvote, currently ${post.downvotes} downvotes`}
+            aria-pressed={userVote === 'down'}
           >
-            <ThumbsDown size={18} fill={userVote === 'down' ? 'currentColor' : 'none'} />
+            <ThumbsDown size={18} fill={userVote === 'down' ? 'currentColor' : 'none'} aria-hidden="true" />
           </button>
         </div>
 
@@ -93,7 +102,7 @@ export default function PostCard({ post }) {
           {post.image && (
             <img
               src={post.image}
-              alt="Post preview"
+              alt={`Image for post: ${post.title}`}
               onClick={handlePostClick}
               className="w-full h-auto max-h-72 object-cover rounded mb-3 group-hover:opacity-90 transition"
             />
@@ -110,23 +119,43 @@ export default function PostCard({ post }) {
           )}
 
           {/* Footer Actions */}
-          <div className="flex gap-1 mt-auto">
+          <div className="flex gap-1 mt-auto items-center">
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 handlePostClick();
               }}
               className="flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-100 text-reddit-gray hover:text-blue-600 transition text-xs min-h-[36px] flex-1 sm:flex-none"
+              aria-label={`${post.commentCount} comments`}
             >
-              <MessageCircle size={16} />
+              <MessageCircle size={16} aria-hidden="true" />
               <span className="hidden sm:inline">{post.commentCount}</span>
             </button>
-            <button className="flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-100 text-reddit-gray hover:text-gray-700 transition text-xs min-h-[36px] flex-1 sm:flex-none">
-              <Share size={16} />
+            {aiAnalyzedCount > 0 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handlePostClick();
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded hover:bg-purple-50 text-purple-500 hover:text-purple-700 transition text-xs min-h-[36px]"
+                aria-label={`${aiAnalyzedCount} AI-analyzed comments — click to view`}
+              >
+                <Brain size={14} aria-hidden="true" />
+                <span className="hidden sm:inline text-[11px] font-medium">{aiAnalyzedCount} AI</span>
+              </button>
+            )}
+            <button
+              className="flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-100 text-reddit-gray hover:text-gray-700 transition text-xs min-h-[36px] flex-1 sm:flex-none"
+              aria-label="Share post"
+            >
+              <Share size={16} aria-hidden="true" />
               <span className="hidden sm:inline">Share</span>
             </button>
-            <button className="flex items-center justify-center p-2 rounded hover:bg-gray-100 text-reddit-gray hover:text-gray-700 transition min-h-[36px] min-w-[36px]">
-              <MoreVertical size={16} />
+            <button
+              className="flex items-center justify-center p-2 rounded hover:bg-gray-100 text-reddit-gray hover:text-gray-700 transition min-h-[36px] min-w-[36px]"
+              aria-label="More options"
+            >
+              <MoreVertical size={16} aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -143,13 +172,14 @@ export default function PostCard({ post }) {
                 ? 'text-orange-500'
                 : 'text-reddit-gray hover:text-orange-500'
             }`}
-            title="Upvote"
+            aria-label={`Upvote, currently ${post.upvotes} upvotes`}
+            aria-pressed={userVote === 'up'}
           >
-            <ThumbsUp size={16} fill={userVote === 'up' ? 'currentColor' : 'none'} />
+            <ThumbsUp size={16} fill={userVote === 'up' ? 'currentColor' : 'none'} aria-hidden="true" />
           </button>
           <span className={`text-xs font-semibold min-w-[32px] text-center ${
             userVote === 'up' ? 'text-orange-500' : userVote === 'down' ? 'text-blue-500' : 'text-reddit-gray'
-          }`}>
+          }`} aria-label={`${upvoteScore} votes`}>
             {upvoteScore}
           </span>
           <button
@@ -162,12 +192,13 @@ export default function PostCard({ post }) {
                 ? 'text-blue-500'
                 : 'text-reddit-gray hover:text-blue-500'
             }`}
-            title="Downvote"
+            aria-label={`Downvote, currently ${post.downvotes} downvotes`}
+            aria-pressed={userVote === 'down'}
           >
-            <ThumbsDown size={16} fill={userVote === 'down' ? 'currentColor' : 'none'} />
+            <ThumbsDown size={16} fill={userVote === 'down' ? 'currentColor' : 'none'} aria-hidden="true" />
           </button>
         </div>
       </div>
-    </div>
+    </article>
   );
 }

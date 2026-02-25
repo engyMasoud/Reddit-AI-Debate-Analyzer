@@ -28,10 +28,11 @@ export default function MobileDrawer({ onClose }) {
       <div
         className="fixed inset-0 bg-black bg-opacity-50 z-30"
         onClick={onClose}
+        aria-hidden="true"
       ></div>
 
       {/* Drawer */}
-      <div className="fixed left-0 top-[56px] bottom-0 w-64 bg-reddit-light shadow-lg z-40 overflow-y-auto">
+      <nav className="fixed left-0 top-[56px] bottom-0 w-64 bg-reddit-light shadow-lg z-40 overflow-y-auto" aria-label="Mobile navigation">
         <div className="p-4 space-y-4">
           {/* Feeds Section */}
           <div>
@@ -60,8 +61,8 @@ export default function MobileDrawer({ onClose }) {
           <div>
             <div className="flex items-center justify-between mb-3 px-1">
               <h3 className="text-xs font-bold text-reddit-gray uppercase">Communities</h3>
-              <button className="p-1 hover:bg-gray-200 rounded-full min-h-[40px] min-w-[40px] flex items-center justify-center" title="Add community">
-                <Plus size={18} />
+              <button className="p-1 hover:bg-gray-200 rounded-full min-h-[40px] min-w-[40px] flex items-center justify-center" aria-label="Add community">
+                <Plus size={18} aria-hidden="true" />
               </button>
             </div>
 
@@ -89,7 +90,7 @@ export default function MobileDrawer({ onClose }) {
             </button>
           </div>
         </div>
-      </div>
+      </nav>
     </>
   );
 }
