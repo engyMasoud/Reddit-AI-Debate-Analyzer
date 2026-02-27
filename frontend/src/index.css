@@ -11,9 +11,10 @@ html {
 }
 
 body {
-  @apply bg-reddit-page;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  color: #0a0e27;
+  background: linear-gradient(135deg, #c4b5fd 0%, #e0d4ff 30%, #a5b4fc 60%, #ddd6fe 100%);
+  background-attachment: fixed;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: #0f172a;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -29,23 +30,23 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #818384;
+  background: #94a3b8;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #575757;
+  background: #64748b;
 }
 
 /* Button and input focus states — WCAG 2.1 visible focus indicators */
 input:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid #7c3aed;
   outline-offset: 2px;
 }
 
 button:focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid #7c3aed;
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -64,7 +65,7 @@ button:focus:not(:focus-visible) {
   left: 16px;
   z-index: 9999;
   padding: 8px 16px;
-  background: #1d4ed8;
+  background: #7c3aed;
   color: #fff;
   font-weight: 600;
   font-size: 0.875rem;
@@ -79,7 +80,7 @@ button:focus:not(:focus-visible) {
 
 /* Placeholder styling */
 ::placeholder {
-  color: #818384;
+  color: #94a3b8;
 }
 
 /* Smooth transitions */
@@ -102,4 +103,14 @@ a {
 
 .animate-fadeIn {
   animation: fadeIn 0.2s ease-out;
+}
+
+/* Pulse animation for skeleton loaders */
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.animate-pulse-slow {
+  animation: pulse 1.8s ease-in-out infinite;
 }
