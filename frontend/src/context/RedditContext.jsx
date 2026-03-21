@@ -1,115 +1,288 @@
-import { createContext, useState, useCallback, useRef } from 'react';
-import { mockPosts, mockSubreddits, currentUser, mockComments, mockWritingFeedback } from '../mockData';
+import { createContext, useState, useCallback, useRef, useEffect, useContext } from 'react';
+import {
+  login as apiLogin,
+  register as apiRegister,
+  googleLogin as apiGoogleLogin,
+  fetchMe as apiFetchMe,
+  setToken,
+  loadToken,
+  clearToken,
+  setOnAuthFailure,
+  fetchPosts as apiFetchPosts,
+  fetchSubreddits as apiFetchSubreddits,
+  fetchComments as apiFetchComments,
+  voteOnPost,
+  voteOnComment,
+  addCommentApi,
+  createPost as apiCreatePost,
+  joinSubredditApi,
+  getComposerSocket,
+  disconnectComposerSocket,
+  fetchNotifications as apiFetchNotifications,
+  fetchUnreadCount as apiFetchUnreadCount,
+  markNotificationRead as apiMarkNotifRead,
+  markAllNotificationsRead as apiMarkAllRead,
+} from '../api';
 
 export const RedditContext = createContext();
 
+export function useReddit() {
+  return useContext(RedditContext);
+}
+
 export const RedditProvider = ({ children }) => {
-  const [posts, setPosts] = useState(mockPosts);
-  const [subreddits] = useState(mockSubreddits);
-  const [user, setUser] = useState(currentUser);
+  const [posts, setPosts] = useState([]);
+  const [subreddits, setSubreddits] = useState([]);
+  const [user, setUser] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
   const [selectedSubreddit, setSelectedSubreddit] = useState(null);
   const [selectedPost, setSelectedPost] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [userJoinedSubreddits, setUserJoinedSubreddits] = useState(user.joinedSubreddits);
-  const [comments, setComments] = useState(mockComments);
-  const [userVotes, setUserVotes] = useState({}); // Track user's votes: { 'post-id': 'up'|'down'|null, ... }
-  const [expandedSummaries, setExpandedSummaries] = useState({}); // Track which AI summaries are expanded
-  const [draftFeedback, setDraftFeedback] = useState(null); // Current writing feedback
+  const [showMyPosts, setShowMyPosts] = useState(false);
+  const [userJoinedSubreddits, setUserJoinedSubreddits] = useState([]);
+  const [comments, setComments] = useState([]);
+  const [userVotes, setUserVotes] = useState({});
+  const [expandedSummaries, setExpandedSummaries] = useState({});
+  const [draftFeedback, setDraftFeedback] = useState(null);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
-  const analyzeTimeoutRef = useRef(null); // Track pending analyzeDraft timeout to cancel stale calls
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const socketRef = useRef(null);
+  const initRef = useRef(false);
 
-  const handleVote = useCallback((postId, voteType) => {
+  function normalizeUser(u) {
+    return {
+      id: u.id,
+      username: u.username,
+      avatar: u.avatar || '👤',
+      karma: u.karma,
+      joinedDate: u.joinedDate ? new Date(u.joinedDate) : new Date(),
+      joinedSubreddits: u.joinedSubreddits || [],
+    };
+  }
+
+  async function fetchInitialData() {
+    const [postsData, subsData] = await Promise.all([
+      apiFetchPosts(),
+      apiFetchSubreddits(),
+    ]);
+    setPosts(postsData.map(normalizePost));
+    setUserVotes(extractVotesFromPosts(postsData));
+    setSubreddits(subsData);
+  }
+
+  // ── Bootstrap: check stored token, validate via /auth/me ──
+  useEffect(() => {
+    if (initRef.current) return;
+    initRef.current = true;
+
+    setOnAuthFailure(() => {
+      clearToken();
+      setUser(null);
+      setIsAuthenticated(false);
+      initRef.current = false;
+    });
+
+    (async () => {
+      try {
+        const storedToken = loadToken();
+        if (storedToken) {
+          const { user: u } = await apiFetchMe();
+          setUser(normalizeUser(u));
+          setUserJoinedSubreddits(u.joinedSubreddits || []);
+          setIsAuthenticated(true);
+          await fetchInitialData();
+        }
+      } catch (err) {
+        console.error('Session restore failed:', err);
+        clearToken();
+      } finally {
+        setAuthLoading(false);
+      }
+    })();
+  }, []);
+
+  // ── Auth functions exposed to components ──
+  const loginUser = async (username, password) => {
+    const { token, user: u } = await apiLogin(username, password);
+    setToken(token);
+    setUser(normalizeUser(u));
+    setUserJoinedSubreddits(u.joinedSubreddits || []);
+    setIsAuthenticated(true);
+    await fetchInitialData();
+  };
+
+  const registerUser = async (username, email, password) => {
+    const { token, user: u } = await apiRegister(username, email, password);
+    setToken(token);
+    setUser(normalizeUser(u));
+    setUserJoinedSubreddits(u.joinedSubreddits || []);
+    setIsAuthenticated(true);
+    await fetchInitialData();
+  };
+
+  const googleLoginUser = async (credential) => {
+    const { token, user: u } = await apiGoogleLogin(credential);
+    setToken(token);
+    setUser(normalizeUser(u));
+    setUserJoinedSubreddits(u.joinedSubreddits || []);
+    setIsAuthenticated(true);
+    await fetchInitialData();
+  };
+
+  function normalizePost(p) {
+    return {
+      ...p,
+      timestamp: new Date(p.timestamp),
+    };
+  }
+
+  /** Build userVotes entries from posts/comments that have userVote set. */
+  function extractVotesFromPosts(postsData) {
+    const votes = {};
+    for (const p of postsData) {
+      if (p.userVote) votes[`post-${p.id}`] = p.userVote;
+    }
+    return votes;
+  }
+
+  function extractVotesFromComments(commentsData) {
+    const votes = {};
+    for (const c of commentsData) {
+      if (c.userVote) votes[`comment-${c.id}`] = c.userVote;
+    }
+    return votes;
+  }
+
+  // ── Refetch posts when subreddit or search changes ──
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      try {
+        const data = await apiFetchPosts(
+          showMyPosts ? undefined : (selectedSubreddit || undefined),
+          searchQuery || undefined,
+          showMyPosts ? user.id : undefined
+        );
+        setPosts(data.map(normalizePost));
+        setUserVotes((prev) => ({ ...prev, ...extractVotesFromPosts(data) }));
+      } catch (err) {
+        console.error('Failed to fetch posts:', err);
+      }
+    })();
+  }, [selectedSubreddit, searchQuery, showMyPosts, user]);
+
+  // ── Fetch comments when a post is selected ──
+  useEffect(() => {
+    if (!selectedPost) return;
+    (async () => {
+      try {
+        const data = await apiFetchComments(selectedPost.id);
+        setComments(data.map((c) => ({ ...c, timestamp: new Date(c.timestamp) })));
+        setUserVotes((prev) => ({ ...prev, ...extractVotesFromComments(data) }));
+      } catch (err) {
+        console.error('Failed to fetch comments:', err);
+      }
+    })();
+  }, [selectedPost]);
+
+  // ── Socket.IO for writing feedback ──
+  useEffect(() => {
+    if (!user) return;
+    const socket = getComposerSocket();
+    socketRef.current = socket;
+
+    socket.on('feedback:result', (result) => {
+      setDraftFeedback({
+        issues: result.issues,
+        score: result.score,
+        suggestions: result.suggestions,
+        goodPoints: result.goodPoints,
+        confidence: result.confidence,
+        generatedAt: new Date(result.generatedAt),
+      });
+      setFeedbackLoading(false);
+    });
+
+    socket.on('feedback:error', (err) => {
+      console.error('Feedback error:', err);
+      setFeedbackLoading(false);
+    });
+
+    return () => {
+      socket.off('feedback:result');
+      socket.off('feedback:error');
+      disconnectComposerSocket();
+    };
+  }, [user]);
+
+  // ── Notifications: fetch + poll every 30s ──
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+
+    async function loadNotifications() {
+      try {
+        const [notifs, { count }] = await Promise.all([
+          apiFetchNotifications(),
+          apiFetchUnreadCount(),
+        ]);
+        if (!cancelled) {
+          setNotifications(notifs);
+          setUnreadCount(count);
+        }
+      } catch (err) {
+        console.error('Failed to fetch notifications:', err);
+      }
+    }
+
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 30000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [user]);
+
+  // ── Post Voting ──
+  const handleVote = useCallback(async (postId, voteType) => {
     const voteKey = `post-${postId}`;
-    const currentVote = userVotes[voteKey];
 
-    setPosts((prevPosts) =>
-      prevPosts.map((post) => {
-        if (post.id === postId) {
-          const newPost = { ...post };
-          
-          // If clicking the same vote type again, remove the vote
-          if (currentVote === voteType) {
-            if (voteType === 'up') {
-              newPost.upvotes = Math.max(0, newPost.upvotes - 1);
-            } else {
-              newPost.downvotes = Math.max(0, newPost.downvotes - 1);
-            }
-            setUserVotes((prev) => ({
-              ...prev,
-              [voteKey]: null,
-            }));
-          } else {
-            // If changing vote or voting for the first time
-            if (currentVote === 'up') {
-              newPost.upvotes = Math.max(0, newPost.upvotes - 1);
-            } else if (currentVote === 'down') {
-              newPost.downvotes = Math.max(0, newPost.downvotes - 1);
-            }
+    try {
+      const { upvotes, downvotes, userVote } = await voteOnPost(postId, voteType);
+      setPosts((prev) =>
+        prev.map((post) =>
+          post.id === postId ? { ...post, upvotes, downvotes } : post
+        )
+      );
+      setUserVotes((prev) => ({
+        ...prev,
+        [voteKey]: userVote || null,
+      }));
+    } catch (err) {
+      console.error('Vote failed:', err);
+    }
+  }, []);
 
-            if (voteType === 'up') {
-              newPost.upvotes += 1;
-            } else {
-              newPost.downvotes += 1;
-            }
-
-            setUserVotes((prev) => ({
-              ...prev,
-              [voteKey]: voteType,
-            }));
-          }
-          return newPost;
-        }
-        return post;
-      })
-    );
-  }, [userVotes]);
-
-  const handleCommentVote = useCallback((commentId, voteType) => {
+  // ── Comment Voting ──
+  const handleCommentVote = useCallback(async (commentId, voteType) => {
     const voteKey = `comment-${commentId}`;
-    const currentVote = userVotes[voteKey];
 
-    setComments((prevComments) =>
-      prevComments.map((comment) => {
-        if (comment.id === commentId) {
-          const newComment = { ...comment };
+    try {
+      const { upvotes, downvotes, userVote } = await voteOnComment(commentId, voteType);
+      setComments((prev) =>
+        prev.map((c) =>
+          c.id === commentId ? { ...c, upvotes, downvotes } : c
+        )
+      );
+      setUserVotes((prev) => ({
+        ...prev,
+        [voteKey]: userVote || null,
+      }));
+    } catch (err) {
+      console.error('Comment vote failed:', err);
+    }
+  }, []);
 
-          // If clicking the same vote type again, remove the vote
-          if (currentVote === voteType) {
-            if (voteType === 'up') {
-              newComment.upvotes = Math.max(0, newComment.upvotes - 1);
-            } else {
-              newComment.downvotes = Math.max(0, newComment.downvotes - 1);
-            }
-            setUserVotes((prev) => ({
-              ...prev,
-              [voteKey]: null,
-            }));
-          } else {
-            // If changing vote or voting for the first time
-            if (currentVote === 'up') {
-              newComment.upvotes = Math.max(0, newComment.upvotes - 1);
-            } else if (currentVote === 'down') {
-              newComment.downvotes = Math.max(0, newComment.downvotes - 1);
-            }
-
-            if (voteType === 'up') {
-              newComment.upvotes += 1;
-            } else {
-              newComment.downvotes += 1;
-            }
-
-            setUserVotes((prev) => ({
-              ...prev,
-              [voteKey]: voteType,
-            }));
-          }
-          return newComment;
-        }
-        return comment;
-      })
-    );
-  }, [userVotes]);
-
+  // ── Comment count bump (used after adding comment) ──
   const handleComment = useCallback((postId) => {
     setPosts((prevPosts) =>
       prevPosts.map((post) => {
@@ -121,34 +294,23 @@ export const RedditProvider = ({ children }) => {
     );
   }, []);
 
-  const joinSubreddit = useCallback((subredditId) => {
-    setUserJoinedSubreddits((prev) => {
-      if (prev.includes(subredditId)) {
+  // ── Join / Leave subreddit ──
+  const joinSubreddit = useCallback(async (subredditId) => {
+    try {
+      const { joined } = await joinSubredditApi(subredditId);
+      setUserJoinedSubreddits((prev) => {
+        if (joined) return [...prev, subredditId];
         return prev.filter((id) => id !== subredditId);
-      }
-      return [...prev, subredditId];
-    });
+      });
+    } catch (err) {
+      console.error('Join/leave failed:', err);
+    }
   }, []);
 
+  // ── Feed filtering (post-fetch, used for client-side display) ──
   const getFeedPosts = useCallback(() => {
-    let filtered = posts;
-
-    if (selectedSubreddit) {
-      filtered = filtered.filter((post) => post.subreddit === selectedSubreddit);
-    }
-
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (post) =>
-          post.title.toLowerCase().includes(query) ||
-          post.content.toLowerCase().includes(query) ||
-          post.author.toLowerCase().includes(query)
-      );
-    }
-
-    return filtered;
-  }, [posts, selectedSubreddit, searchQuery]);
+    return posts;
+  }, [posts]);
 
   // DS1-US1: Toggle AI reasoning summary for a comment
   const toggleSummary = useCallback((commentId) => {
@@ -163,202 +325,109 @@ export const RedditProvider = ({ children }) => {
     return !!expandedSummaries[commentId];
   }, [expandedSummaries]);
 
-  // DS3-US3: Analyze draft text for writing feedback (simulated)
+  // DS3-US3: Analyze draft text via Socket.IO
   const analyzeDraft = useCallback((draftText) => {
     if (!draftText || draftText.trim().length < 10) {
       setDraftFeedback(null);
       return;
     }
 
-    // Cancel any pending stale timeout from a previous call
-    if (analyzeTimeoutRef.current) {
-      clearTimeout(analyzeTimeoutRef.current);
-    }
-
     setFeedbackLoading(true);
 
-    // Simulate API call with debounce-like delay
-    analyzeTimeoutRef.current = setTimeout(() => {
-      analyzeTimeoutRef.current = null;
-      const issues = [];
-      const suggestions = [];
-      const goodPoints = [];
-      const lowerText = draftText.toLowerCase();
-
-      // Detect weak evidence patterns
-      const weakPatterns = [
-        { pattern: /everyone (knows|says|agrees|uses|thinks)/gi, msg: "Appeal to popularity — provide specific evidence instead of 'everyone'" },
-        { pattern: /obviously|clearly|of course/gi, msg: "Assumed conclusion — what seems obvious to you may need evidence for others" },
-        { pattern: /I (think|believe|feel) .* because .* (just|simply)/gi, msg: "Weak justification — strengthen with data or sources" },
-        { pattern: /always|never|all .*(agree|prefer|think)/gi, msg: "Absolute claim — qualify with specific data or percentages" },
-      ];
-
-      weakPatterns.forEach((wp, idx) => {
-        const match = wp.pattern.exec(draftText);
-        if (match) {
-          issues.push({
-            id: issues.length + 1,
-            type: "weak_evidence",
-            position: { start: match.index, end: match.index + match[0].length },
-            lineNumber: draftText.substring(0, match.index).split('\n').length,
-            flaggedText: match[0],
-            explanation: wp.msg,
-            severity: "medium",
-            confidence: 0.8,
-          });
-        }
-      });
-
-      // Detect circular logic (repeated phrases)
-      const sentences = draftText.split(/[.!?]+/).filter(s => s.trim().length > 10);
-      for (let i = 0; i < sentences.length; i++) {
-        for (let j = i + 1; j < sentences.length; j++) {
-          const words1 = sentences[i].toLowerCase().split(/\s+/).filter(w => w.length > 3);
-          const words2 = sentences[j].toLowerCase().split(/\s+/).filter(w => w.length > 3);
-          const overlap = words1.filter(w => words2.includes(w));
-          if (overlap.length > 3) {
-            const start = draftText.indexOf(sentences[j].trim());
-            issues.push({
-              id: issues.length + 1,
-              type: "circular_logic",
-              position: { start, end: start + sentences[j].trim().length },
-              lineNumber: draftText.substring(0, start).split('\n').length,
-              flaggedText: sentences[j].trim().substring(0, 40) + "...",
-              explanation: `This appears to repeat ideas from an earlier sentence. Consider adding new evidence or removing the repetition.`,
-              severity: "medium",
-              confidence: 0.75,
-            });
-            break;
-          }
-        }
-      }
-
-      // Detect unsupported claims
-      const unsupportedPatterns = [
-        { pattern: /studies (show|prove|demonstrate)/gi, msg: "Cite the specific study — which researchers, what year, what journal?" },
-        { pattern: /research (shows|proves|indicates)/gi, msg: "Specify the research — vague references to 'research' weaken your argument" },
-        { pattern: /it('s| is) (a fact|proven|well.known)/gi, msg: "Provide the source for this claim — stating something is a fact requires evidence" },
-      ];
-
-      unsupportedPatterns.forEach((up) => {
-        const match = up.pattern.exec(draftText);
-        if (match) {
-          issues.push({
-            id: issues.length + 1,
-            type: "unsupported_claim",
-            position: { start: match.index, end: match.index + match[0].length },
-            lineNumber: draftText.substring(0, match.index).split('\n').length,
-            flaggedText: match[0],
-            explanation: up.msg,
-            severity: "high",
-            confidence: 0.88,
-          });
-        }
-      });
-
-      // Detect good points
-      if (draftText.match(/https?:\/\/|according to|source:|citation:/i)) {
-        goodPoints.push("Includes a source or citation");
-      }
-      if (draftText.match(/however|on the other hand|while .* argue|counterpoint/i)) {
-        goodPoints.push("Acknowledges opposing viewpoints");
-      }
-      if (draftText.match(/\d+%|\d+ percent|data shows/i)) {
-        goodPoints.push("Uses specific data or statistics");
-      }
-      if (sentences.length >= 2) {
-        goodPoints.push("Structured argument with multiple points");
-      }
-      if (goodPoints.length === 0 && draftText.trim().length >= 10) {
-        goodPoints.push("Clear assertion of position");
-      }
-
-      // Build suggestions
-      if (issues.some(i => i.type === "weak_evidence")) {
-        suggestions.push({
-          id: 1,
-          text: "Add specific citations or data to support your claims",
-          type: "reference",
-          priority: "high",
-          exampleFix: "'According to [specific source/study]...'",
-        });
-      }
-      if (issues.some(i => i.type === "circular_logic")) {
-        suggestions.push({
-          id: 2,
-          text: "Remove repeated arguments or expand them with new evidence",
-          type: "structure",
-          priority: "medium",
-          exampleFix: "Replace the repeated point with a new supporting argument",
-        });
-      }
-      if (issues.some(i => i.type === "unsupported_claim")) {
-        suggestions.push({
-          id: 3,
-          text: "Qualify absolute statements and add evidence",
-          type: "clarity",
-          priority: "high",
-          exampleFix: "'Many experts suggest...' instead of absolute claims",
-        });
-      }
-      if (!draftText.match(/however|but|although|while/i)) {
-        suggestions.push({
-          id: 4,
-          text: "Consider addressing counterarguments to strengthen your position",
-          type: "clarity",
-          priority: "medium",
-          exampleFix: "'While some may argue X, the evidence shows Y because...'",
-        });
-      }
-
-      // Calculate score
-      const maxIssues = 5;
-      const score = Math.max(0, Math.min(1, 1 - (issues.length / maxIssues)));
-
-      setDraftFeedback({
-        issues,
-        score,
-        suggestions,
-        goodPoints,
-        confidence: 0.79,
-        generatedAt: new Date(),
-      });
-      setFeedbackLoading(false);
-    }, 600);
+    const socket = socketRef.current;
+    if (socket && socket.connected) {
+      socket.emit('draft:analyze', { draftText });
+    } else {
+      // Fallback: try reconnecting
+      const newSocket = getComposerSocket();
+      socketRef.current = newSocket;
+      newSocket.emit('draft:analyze', { draftText });
+    }
   }, []);
 
   // Get comments for a specific post
   const getPostComments = useCallback((postId) => {
-    return comments.filter(c => c.postId === postId);
+    return comments.filter((c) => c.postId === postId);
   }, [comments]);
 
   // Add a new comment to a post
-  const addComment = useCallback((postId, text) => {
-    const newComment = {
-      id: Date.now(),
-      postId,
-      author: user.username,
-      text,
-      upvotes: 1,
-      downvotes: 0,
-      timestamp: new Date(),
-      userVote: null,
-      aiSummary: null,
-    };
-    setComments(prev => [newComment, ...prev]);
-    handleComment(postId);
-  }, [user.username, handleComment]);
+  const addComment = useCallback(async (postId, text, parentCommentId) => {
+    try {
+      const newComment = await addCommentApi(postId, text, parentCommentId);
+      setComments((prev) => [
+        ...prev,
+        { ...newComment, timestamp: new Date(newComment.timestamp) },
+      ]);
+      handleComment(postId);
+    } catch (err) {
+      console.error('Add comment failed:', err);
+    }
+  }, [handleComment]);
+
+  // Create a new post
+  const createPost = useCallback(async (title, content, subreddit, image) => {
+    const newPost = await apiCreatePost(title, content, subreddit, image);
+    setPosts((prev) => [normalizePost(newPost), ...prev]);
+    return newPost;
+  }, []);
+
+  // Logout
+  const logout = useCallback(() => {
+    clearToken();
+    setUser(null);
+    setPosts([]);
+    setComments([]);
+    setUserVotes({});
+    setSubreddits([]);
+    setUserJoinedSubreddits([]);
+    setSelectedPost(null);
+    setSelectedSubreddit(null);
+    setIsAuthenticated(false);
+    setNotifications([]);
+    setUnreadCount(0);
+    setShowMyPosts(false);
+    initRef.current = false;
+  }, []);
+
+  // Mark a single notification as read
+  const markNotifRead = useCallback(async (notifId) => {
+    try {
+      await apiMarkNotifRead(notifId);
+      setNotifications((prev) => prev.map((n) => n.id === notifId ? { ...n, isRead: true } : n));
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    } catch (err) {
+      console.error('Failed to mark notification read:', err);
+    }
+  }, []);
+
+  // Mark all notifications as read
+  const markAllNotifsRead = useCallback(async () => {
+    try {
+      await apiMarkAllRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      setUnreadCount(0);
+    } catch (err) {
+      console.error('Failed to mark all notifications read:', err);
+    }
+  }, []);
 
   const value = {
     posts,
     subreddits,
     user,
+    isAuthenticated,
+    authLoading,
+    loginUser,
+    registerUser,
+    googleLoginUser,
     selectedSubreddit,
     setSelectedSubreddit,
     selectedPost,
     setSelectedPost,
     searchQuery,
     setSearchQuery,
+    showMyPosts,
+    setShowMyPosts,
     userJoinedSubreddits,
     handleVote,
     handleCommentVote,
@@ -378,6 +447,12 @@ export const RedditProvider = ({ children }) => {
     // Comment helpers
     getPostComments,
     addComment,
+    createPost,
+    logout,
+    notifications,
+    unreadCount,
+    markNotifRead,
+    markAllNotifsRead,
   };
 
   return (

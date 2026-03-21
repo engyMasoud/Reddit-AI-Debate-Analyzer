@@ -3,7 +3,7 @@ import { RedditContext } from '../context/RedditContext';
 import PostRow from './PostCard';
 
 export default function MainFeed() {
-  const { getFeedPosts, selectedSubreddit } = useContext(RedditContext);
+  const { getFeedPosts, selectedSubreddit, showMyPosts } = useContext(RedditContext);
 
   const posts = getFeedPosts();
 
@@ -12,7 +12,7 @@ export default function MainFeed() {
       {/* Section Header */}
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-900">
-          {selectedSubreddit || 'All Discussions'}
+          {showMyPosts ? 'My Posts' : (selectedSubreddit || 'All Discussions')}
         </h1>
         <p className="text-sm text-gray-400 mt-1">
           {posts.length} thread{posts.length !== 1 ? 's' : ''}

@@ -1,6 +1,7 @@
 import { useContext, useState } from 'react';
 import { ChevronDown, ChevronUp, Sparkles, Shield, BookOpen, Check, Loader2, AlertTriangle } from 'lucide-react';
 import { RedditContext } from '../context/RedditContext';
+import { fetchReasoningSummary } from '../api';
 
 /**
  * DS1-US1: Inline AI Reasoning Summary Panel
@@ -11,36 +12,48 @@ import { RedditContext } from '../context/RedditContext';
 export default function ReasoningSummaryPanel({ comment }) {
   const { toggleSummary, isSummaryExpanded } = useContext(RedditContext);
   const [panelState, setPanelState] = useState('idle'); // idle | loading | success | error | empty
-
-  if (!comment.aiSummary && panelState === 'idle') return null;
+  const [aiSummary, setAiSummary] = useState(null);
 
   const expanded = isSummaryExpanded(comment.id);
-  const { aiSummary } = comment;
 
-  const handleToggle = () => {
+  const handleToggle = async () => {
     if (!expanded) {
-      // Simulate loading → success/error/empty
       toggleSummary(comment.id);
       setPanelState('loading');
-      setTimeout(() => {
-        if (!aiSummary) {
-          setPanelState('empty');
-        } else {
-          // 90% success, 10% error for demo
-          setPanelState(Math.random() > 0.1 ? 'success' : 'error');
-        }
-      }, 1500);
+      try {
+        const data = await fetchReasoningSummary(comment.id);
+        setAiSummary({
+          summary: data.summary,
+          primaryClaim: data.primaryClaim,
+          evidenceBlocks: data.evidenceBlocks,
+          coherenceScore: data.coherenceScore,
+          generatedAt: new Date(data.generatedAt),
+        });
+        setPanelState('success');
+      } catch {
+        setPanelState('error');
+      }
     } else {
       toggleSummary(comment.id);
       setPanelState('idle');
     }
   };
 
-  const handleRetry = () => {
+  const handleRetry = async () => {
     setPanelState('loading');
-    setTimeout(() => {
-      setPanelState(aiSummary ? 'success' : 'empty');
-    }, 1500);
+    try {
+      const data = await fetchReasoningSummary(comment.id);
+      setAiSummary({
+        summary: data.summary,
+        primaryClaim: data.primaryClaim,
+        evidenceBlocks: data.evidenceBlocks,
+        coherenceScore: data.coherenceScore,
+        generatedAt: new Date(data.generatedAt),
+      });
+      setPanelState('success');
+    } catch {
+      setPanelState('error');
+    }
   };
 
   // Score helpers for success state
