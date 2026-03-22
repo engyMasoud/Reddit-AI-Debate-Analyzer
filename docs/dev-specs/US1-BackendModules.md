@@ -471,7 +471,11 @@ export interface IAIAnalysisService {
 // ─── services/interfaces/ICacheService.ts ───  (shared with US3)
 export interface ICacheService {
   /** public */ get<T = object>(key: string): Promise<T | null>;
-  /** public */ set(key: string, value: object, ttlSeconds?: number): Promise<void>;
+  /** public */ set(
+    key: string,
+    value: object,
+    ttlSeconds?: number,
+  ): Promise<void>;
   /** public */ delete(key: string): Promise<void>;
   /** public */ exists(key: string): Promise<boolean>;
 }
@@ -575,7 +579,9 @@ import { Pool } from "pg";
 export class CommentRepository {
   /** private */ private pool: Pool;
 
-  constructor(pool: Pool) { this.pool = pool; }
+  constructor(pool: Pool) {
+    this.pool = pool;
+  }
 
   /** public */ async getById(id: number): Promise<Comment | null>;
   /** public */ async getByPostId(postId: number): Promise<Comment[]>;
@@ -585,16 +591,25 @@ export class CommentRepository {
 
 ```typescript
 // ─── repositories/ReasoningSummaryRepository.ts ───
-import { ReasoningSummaryInsert, ReasoningSummaryRow } from "../models/ReasoningSummary";
+import {
+  ReasoningSummaryInsert,
+  ReasoningSummaryRow,
+} from "../models/ReasoningSummary";
 import { Pool } from "pg";
 
 export class ReasoningSummaryRepository {
   /** private */ private pool: Pool;
 
-  constructor(pool: Pool) { this.pool = pool; }
+  constructor(pool: Pool) {
+    this.pool = pool;
+  }
 
-  /** public */ async findByCommentId(commentId: number): Promise<ReasoningSummaryRow | null>;
-  /** public */ async upsert(data: ReasoningSummaryInsert): Promise<ReasoningSummaryRow>;
+  /** public */ async findByCommentId(
+    commentId: number,
+  ): Promise<ReasoningSummaryRow | null>;
+  /** public */ async upsert(
+    data: ReasoningSummaryInsert,
+  ): Promise<ReasoningSummaryRow>;
   /** public */ async deleteByCommentId(commentId: number): Promise<void>;
 }
 ```

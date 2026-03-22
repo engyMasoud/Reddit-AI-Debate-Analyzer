@@ -857,12 +857,17 @@ import { Pool } from "pg";
 export class DraftRepository {
   /** private */ private pool: Pool;
 
-  constructor(pool: Pool) { this.pool = pool; }
+  constructor(pool: Pool) {
+    this.pool = pool;
+  }
 
   /** public */ async save(data: DraftInsert): Promise<DraftRow>;
   /** public */ async findByUserId(userId: number): Promise<DraftRow[]>;
   /** public */ async findById(id: number): Promise<DraftRow | null>;
-  /** public */ async updateText(id: number, text: string): Promise<DraftRow | null>;
+  /** public */ async updateText(
+    id: number,
+    text: string,
+  ): Promise<DraftRow | null>;
   /** public */ async deleteById(id: number): Promise<void>;
 }
 ```
@@ -875,10 +880,16 @@ import { Pool } from "pg";
 export class FeedbackLogRepository {
   /** private */ private pool: Pool;
 
-  constructor(pool: Pool) { this.pool = pool; }
+  constructor(pool: Pool) {
+    this.pool = pool;
+  }
 
   /** public */ async save(data: FeedbackLogInsert): Promise<FeedbackLogRow>;
-  /** public */ async findByUserId(userId: number, limit: number, offset: number): Promise<FeedbackLogRow[]>;
+  /** public */ async findByUserId(
+    userId: number,
+    limit: number,
+    offset: number,
+  ): Promise<FeedbackLogRow[]>;
   /** public */ async countByUserId(userId: number): Promise<number>;
 }
 ```
@@ -910,7 +921,10 @@ export class WritingFeedbackSessionManager {
   /** public */ registerSession(userId: number, socketId: string): boolean;
   /** public */ removeSession(userId: number): void;
   /** public */ updateDraft(userId: number, draftText: string): boolean;
-  /** public */ updateFeedback(userId: number, feedback: FeedbackResult): boolean;
+  /** public */ updateFeedback(
+    userId: number,
+    feedback: FeedbackResult,
+  ): boolean;
   /** public */ markAnalysisInFlight(userId: number): boolean;
   /** public */ isAnalysisInFlight(userId: number): boolean;
   /** public */ getSession(userId: number): SessionEntry | null;
