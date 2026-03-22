@@ -14,21 +14,21 @@ Users leave lengthy Reddit threads because of repetition and buried arguments. T
 
 ### Scope Boundaries
 
-| In Scope | Out of Scope |
-|----------|-------------|
-| Single-comment AI reasoning summary (REST) | Thread-level debate summary (US2) |
+| In Scope                                    | Out of Scope                               |
+| ------------------------------------------- | ------------------------------------------ |
+| Single-comment AI reasoning summary (REST)  | Thread-level debate summary (US2)          |
 | Lazy-load on user click ("Show AI Summary") | Auto-generating summaries for all comments |
-| In-memory cache (Map-based, P4 constraint) | Redis or distributed cache |
-| Mocked AI service for testing | Production OpenAI prompt tuning |
-| Numeric `SERIAL` IDs for all tables | UUID primary keys |
+| In-memory cache (Map-based, P4 constraint)  | Redis or distributed cache                 |
+| Mocked AI service for testing               | Production OpenAI prompt tuning            |
+| Numeric `SERIAL` IDs for all tables         | UUID primary keys                          |
 
 ### P4 Constraints Recap
 
-| Constraint | Decision |
-|-----------|----------|
-| Scale: 10 simultaneous users | In-memory `Map` replaces Redis; `Promise.all` replaces Bull |
-| Mocked AI | All OpenAI calls behind `IAIAnalysisService`; `MockAIAnalysisService` for tests |
-| Data standardization | `posts` (not threads); numeric `SERIAL` PKs everywhere |
+| Constraint                   | Decision                                                                        |
+| ---------------------------- | ------------------------------------------------------------------------------- |
+| Scale: 10 simultaneous users | In-memory `Map` replaces Redis; `Promise.all` replaces Bull                     |
+| Mocked AI                    | All OpenAI calls behind `IAIAnalysisService`; `MockAIAnalysisService` for tests |
+| Data standardization         | `posts` (not threads); numeric `SERIAL` PKs everywhere                          |
 
 ---
 
@@ -81,13 +81,13 @@ graph TB
 
 ### Component Locations
 
-| Component | Runtime | Notes |
-|-----------|---------|-------|
-| Client | Browser (React 18 + Vite, `:3000`) | Plain JavaScript (JSX), NOT TypeScript |
-| API Server | Node.js 18 + Express 4 (`:4000`) | TypeScript 5.x; single HTTP server shared with Socket.IO (US3) |
-| Database | PostgreSQL 14+ | Single tenant; numeric `SERIAL` PKs |
-| Cache | In-process `Map` | **No Redis** — P4 constraint (10 users) |
-| AI Service | `IAIAnalysisService` interface | `MockAIAnalysisService` in dev/test; `AIAnalysisService` (OpenAI) in production |
+| Component  | Runtime                            | Notes                                                                           |
+| ---------- | ---------------------------------- | ------------------------------------------------------------------------------- |
+| Client     | Browser (React 18 + Vite, `:3000`) | Plain JavaScript (JSX), NOT TypeScript                                          |
+| API Server | Node.js 18 + Express 4 (`:4000`)   | TypeScript 5.x; single HTTP server shared with Socket.IO (US3)                  |
+| Database   | PostgreSQL 14+                     | Single tenant; numeric `SERIAL` PKs                                             |
+| Cache      | In-process `Map`                   | **No Redis** — P4 constraint (10 users)                                         |
+| AI Service | `IAIAnalysisService` interface     | `MockAIAnalysisService` in dev/test; `AIAnalysisService` (OpenAI) in production |
 
 ### Information Flows
 
@@ -348,22 +348,22 @@ classDiagram
 
 ## List of Classes
 
-| Class Name | Package | Responsibility |
-|------------|---------|----------------|
-| `ReasoningSummaryController` | `controllers/` | Thin HTTP handler; validates params via `CommentValidator`, delegates to `IReasoningSummaryService`, serializes response |
-| `ReasoningSummaryService` | `services/` | Orchestrates cache → DB → AI generation pipeline; implements `IReasoningSummaryService` |
-| `IAIAnalysisService` | `services/interfaces/` | Interface — single contract for all LLM interaction (shared with US3) |
-| `AIAnalysisService` | `services/` | Production implementation; wraps `openai` npm client; sends structured prompts to GPT-4 |
-| `MockAIAnalysisService` | `services/` | Test implementation; returns deterministic fixtures; zero network calls |
-| `ICacheService` | `services/interfaces/` | Interface for key-value cache with TTL |
-| `InMemoryCacheService` | `services/` | `Map`-based implementation; 60 s sweep interval; replaces Redis (P4) |
-| `CommentRepository` | `repositories/` | Parameterized SQL queries against `comments` table via `pg` Pool |
-| `ReasoningSummaryRepository` | `repositories/` | CRUD on `reasoning_summaries` table; `upsert` uses `ON CONFLICT (comment_id) DO UPDATE` |
-| `CommentValidator` | `utils/` | Validates and sanitizes `commentId` param (must be positive integer) |
-| `NLPProcessor` | `utils/` | Sentence splitting and tokenization (used as fallback when AI service calls fail) |
-| `ReasoningSummaryDTO` | `models/` | Immutable DTO matching the frontend `aiSummary` shape |
-| `EvidenceBlock` | `models/` | Value object: `{ type, content, strength }` |
-| `Claim` | `models/` | Value object: `{ id, text, supportingEvidence }` |
+| Class Name                   | Package                | Responsibility                                                                                                           |
+| ---------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `ReasoningSummaryController` | `controllers/`         | Thin HTTP handler; validates params via `CommentValidator`, delegates to `IReasoningSummaryService`, serializes response |
+| `ReasoningSummaryService`    | `services/`            | Orchestrates cache → DB → AI generation pipeline; implements `IReasoningSummaryService`                                  |
+| `IAIAnalysisService`         | `services/interfaces/` | Interface — single contract for all LLM interaction (shared with US3)                                                    |
+| `AIAnalysisService`          | `services/`            | Production implementation; wraps `openai` npm client; sends structured prompts to GPT-4                                  |
+| `MockAIAnalysisService`      | `services/`            | Test implementation; returns deterministic fixtures; zero network calls                                                  |
+| `ICacheService`              | `services/interfaces/` | Interface for key-value cache with TTL                                                                                   |
+| `InMemoryCacheService`       | `services/`            | `Map`-based implementation; 60 s sweep interval; replaces Redis (P4)                                                     |
+| `CommentRepository`          | `repositories/`        | Parameterized SQL queries against `comments` table via `pg` Pool                                                         |
+| `ReasoningSummaryRepository` | `repositories/`        | CRUD on `reasoning_summaries` table; `upsert` uses `ON CONFLICT (comment_id) DO UPDATE`                                  |
+| `CommentValidator`           | `utils/`               | Validates and sanitizes `commentId` param (must be positive integer)                                                     |
+| `NLPProcessor`               | `utils/`               | Sentence splitting and tokenization (used as fallback when AI service calls fail)                                        |
+| `ReasoningSummaryDTO`        | `models/`              | Immutable DTO matching the frontend `aiSummary` shape                                                                    |
+| `EvidenceBlock`              | `models/`              | Value object: `{ type, content, strength }`                                                                              |
+| `Claim`                      | `models/`              | Value object: `{ id, text, supportingEvidence }`                                                                         |
 
 ---
 
@@ -470,23 +470,23 @@ flowchart TD
 
 ## Technology Stack
 
-| Layer | Technology | Version | Purpose | P4 Note |
-|-------|-----------|---------|---------|---------|
-| **Frontend** | React | 18.x | UI — `ReasoningSummaryPanel.jsx` | Plain JSX (not TypeScript) |
-| **Frontend** | Vite | 5.x | Dev server on `:3000`, proxy `/api → :4000` | |
-| **Frontend** | Tailwind CSS | 3.x | Styling + lucide-react icons | |
-| **Backend** | Node.js | 18.x LTS | Runtime | |
-| **Backend** | Express.js | 4.x | HTTP framework | Shared server with Socket.IO (US3) |
-| **Backend** | TypeScript | 5.x | Type safety | |
-| **Database** | PostgreSQL | 14+ | Primary store (`comments`, `reasoning_summaries`) | Numeric `SERIAL` PKs |
-| **Cache** | **In-memory `Map`** | N/A | Key-value w/ TTL (replaces Redis) | **P4: 10-user scale** |
-| **Job Queue** | **`Promise.all`** | N/A | Parallel AI calls (replaces Bull) | **P4: no Bull** |
-| **AI** | OpenAI API (GPT-4) | Latest | Behind `IAIAnalysisService` | **Mocked in tests** |
-| **NLP Fallback** | natural / compromise | Latest | Local tokenization & sentence splitting | |
-| **Testing** | Jest | 29.x | Unit + integration (`MockAIAnalysisService`) | |
-| **Auth** | jsonwebtoken | Latest | JWT HS256 | |
-| **Validation** | zod | 3.x | Request schema validation | |
-| **Query** | pg (node-postgres) | 8.x | Raw parameterized SQL | |
+| Layer            | Technology           | Version  | Purpose                                           | P4 Note                            |
+| ---------------- | -------------------- | -------- | ------------------------------------------------- | ---------------------------------- |
+| **Frontend**     | React                | 18.x     | UI — `ReasoningSummaryPanel.jsx`                  | Plain JSX (not TypeScript)         |
+| **Frontend**     | Vite                 | 5.x      | Dev server on `:3000`, proxy `/api → :4000`       |                                    |
+| **Frontend**     | Tailwind CSS         | 3.x      | Styling + lucide-react icons                      |                                    |
+| **Backend**      | Node.js              | 18.x LTS | Runtime                                           |                                    |
+| **Backend**      | Express.js           | 4.x      | HTTP framework                                    | Shared server with Socket.IO (US3) |
+| **Backend**      | TypeScript           | 5.x      | Type safety                                       |                                    |
+| **Database**     | PostgreSQL           | 14+      | Primary store (`comments`, `reasoning_summaries`) | Numeric `SERIAL` PKs               |
+| **Cache**        | **In-memory `Map`**  | N/A      | Key-value w/ TTL (replaces Redis)                 | **P4: 10-user scale**              |
+| **Job Queue**    | **`Promise.all`**    | N/A      | Parallel AI calls (replaces Bull)                 | **P4: no Bull**                    |
+| **AI**           | OpenAI API (GPT-4)   | Latest   | Behind `IAIAnalysisService`                       | **Mocked in tests**                |
+| **NLP Fallback** | natural / compromise | Latest   | Local tokenization & sentence splitting           |                                    |
+| **Testing**      | Jest                 | 29.x     | Unit + integration (`MockAIAnalysisService`)      |                                    |
+| **Auth**         | jsonwebtoken         | Latest   | JWT HS256                                         |                                    |
+| **Validation**   | zod                  | 3.x      | Request schema validation                         |                                    |
+| **Query**        | pg (node-postgres)   | 8.x      | Raw parameterized SQL                             |                                    |
 
 ---
 
@@ -501,9 +501,9 @@ Authorization: Bearer {jwt_token}
 
 **Path Parameters:**
 
-| Param | Type | Constraints | Example |
-|-------|------|-------------|---------|
-| `commentId` | `integer` | Positive, matches `comments.id` | `3` |
+| Param       | Type      | Constraints                     | Example |
+| ----------- | --------- | ------------------------------- | ------- |
+| `commentId` | `integer` | Positive, matches `comments.id` | `3`     |
 
 **Response — 200 OK:**
 
@@ -580,19 +580,19 @@ interface ReasoningSummaryResponse {
   summary: string;
   primaryClaim: string;
   evidenceBlocks: {
-    type: 'study' | 'data' | 'anecdote' | 'authority' | 'other';
+    type: "study" | "data" | "anecdote" | "authority" | "other";
     content: string;
-    strength: 'high' | 'medium' | 'low';
+    strength: "high" | "medium" | "low";
   }[];
-  coherenceScore: number;   // 0.00–1.00
-  generatedAt: string;      // ISO 8601
+  coherenceScore: number; // 0.00–1.00
+  generatedAt: string; // ISO 8601
 }
 ```
 
 ### Zod Validation Schema
 
 ```typescript
-import { z } from 'zod';
+import { z } from "zod";
 
 export const getReasoningSummaryParams = z.object({
   commentId: z.coerce.number().int().positive(),
@@ -603,12 +603,12 @@ export const getReasoningSummaryParams = z.object({
 
 These core endpoints are **not** US1-specific but are required for the summary to function:
 
-| # | Method | Endpoint | Purpose |
-|---|--------|----------|---------|
-| 1 | `GET` | `/api/v1/posts/:id/comments` | List comments (returns `aiSummary: null`; lazy-load via US1 endpoint) |
-| 2 | `POST` | `/api/v1/posts/:id/comments` | Create comment (new comments have no summary) |
-| 3 | `POST` | `/api/v1/auth/login` | Obtain JWT for authenticated requests |
-| 4 | `POST` | `/api/v1/auth/register` | Register user |
+| #   | Method | Endpoint                     | Purpose                                                               |
+| --- | ------ | ---------------------------- | --------------------------------------------------------------------- |
+| 1   | `GET`  | `/api/v1/posts/:id/comments` | List comments (returns `aiSummary: null`; lazy-load via US1 endpoint) |
+| 2   | `POST` | `/api/v1/posts/:id/comments` | Create comment (new comments have no summary)                         |
+| 3   | `POST` | `/api/v1/auth/login`         | Obtain JWT for authenticated requests                                 |
+| 4   | `POST` | `/api/v1/auth/register`      | Register user                                                         |
 
 ---
 
@@ -618,8 +618,8 @@ These core endpoints are **not** US1-specific but are required for the summary t
 
 ```typescript
 // ─── services/interfaces/IReasoningSummaryService.ts ───
-import { ReasoningSummaryDTO } from '../../models/ReasoningSummary';
-import { Comment } from '../../models/Comment';
+import { ReasoningSummaryDTO } from "../../models/ReasoningSummary";
+import { Comment } from "../../models/Comment";
 
 export interface IReasoningSummaryService {
   /** Retrieve summary (cache → DB → generate). */
@@ -635,14 +635,17 @@ export interface IReasoningSummaryService {
 
 ```typescript
 // ─── services/interfaces/IAIAnalysisService.ts ───  (shared with US3)
-import { Claim } from '../../models/Claim';
-import { EvidenceBlock } from '../../models/EvidenceBlock';
-import { AnalysisResult } from '../../models/AnalysisResult';
+import { Claim } from "../../models/Claim";
+import { EvidenceBlock } from "../../models/EvidenceBlock";
+import { AnalysisResult } from "../../models/AnalysisResult";
 
 export interface IAIAnalysisService {
   extractClaims(text: string): Promise<Claim[]>;
   extractEvidence(text: string): Promise<EvidenceBlock[]>;
-  evaluateCoherence(claims: Claim[], evidence: EvidenceBlock[]): Promise<number>;
+  evaluateCoherence(
+    claims: Claim[],
+    evidence: EvidenceBlock[],
+  ): Promise<number>;
   generateSummary(analysis: AnalysisResult): Promise<string>;
 }
 ```
@@ -661,7 +664,7 @@ export interface ICacheService {
 
 ```typescript
 // ─── models/ReasoningSummary.ts ───
-import { EvidenceBlock } from './EvidenceBlock';
+import { EvidenceBlock } from "./EvidenceBlock";
 
 /** Immutable DTO returned to the frontend. */
 export interface ReasoningSummaryDTO {
@@ -669,7 +672,7 @@ export interface ReasoningSummaryDTO {
   summary: string;
   primaryClaim: string;
   evidenceBlocks: EvidenceBlock[];
-  coherenceScore: number;   // 0–1
+  coherenceScore: number; // 0–1
   generatedAt: Date;
 }
 
@@ -678,7 +681,7 @@ export interface ReasoningSummaryInsert {
   commentId: number;
   summary: string;
   primaryClaim: string;
-  evidenceBlocks: EvidenceBlock[];  // stored as JSONB
+  evidenceBlocks: EvidenceBlock[]; // stored as JSONB
   coherenceScore: number;
 }
 
@@ -688,8 +691,8 @@ export interface ReasoningSummaryRow {
   comment_id: number;
   summary: string;
   primary_claim: string;
-  evidence_blocks: EvidenceBlock[];  // JSONB auto-parsed by pg
-  coherence_score: string;           // NUMERIC comes as string from pg
+  evidence_blocks: EvidenceBlock[]; // JSONB auto-parsed by pg
+  coherence_score: string; // NUMERIC comes as string from pg
   created_at: Date;
   updated_at: Date;
   expires_at: Date;
@@ -699,9 +702,9 @@ export interface ReasoningSummaryRow {
 ```typescript
 // ─── models/EvidenceBlock.ts ───
 export interface EvidenceBlock {
-  type: 'study' | 'data' | 'anecdote' | 'authority' | 'other';
+  type: "study" | "data" | "anecdote" | "authority" | "other";
   content: string;
-  strength: 'high' | 'medium' | 'low';
+  strength: "high" | "medium" | "low";
 }
 ```
 
@@ -731,8 +734,8 @@ export interface Comment {
 
 ```typescript
 // ─── models/AnalysisResult.ts ───
-import { Claim } from './Claim';
-import { EvidenceBlock } from './EvidenceBlock';
+import { Claim } from "./Claim";
+import { EvidenceBlock } from "./EvidenceBlock";
 
 export interface AnalysisResult {
   claims: Claim[];
@@ -745,24 +748,24 @@ export interface AnalysisResult {
 
 ```typescript
 // ─── repositories/CommentRepository.ts ───
-import { Comment } from '../models/Comment';
-import { Pool } from 'pg';
+import { Comment } from "../models/Comment";
+import { Pool } from "pg";
 
 export class CommentRepository {
   constructor(private pool: Pool) {}
 
   async getById(id: number): Promise<Comment | null> {
     const { rows } = await this.pool.query(
-      'SELECT * FROM comments WHERE id = $1',
-      [id]
+      "SELECT * FROM comments WHERE id = $1",
+      [id],
     );
     return rows.length ? this.mapRow(rows[0]) : null;
   }
 
   async getByPostId(postId: number): Promise<Comment[]> {
     const { rows } = await this.pool.query(
-      'SELECT * FROM comments WHERE post_id = $1 ORDER BY created_at ASC',
-      [postId]
+      "SELECT * FROM comments WHERE post_id = $1 ORDER BY created_at ASC",
+      [postId],
     );
     return rows.map(this.mapRow);
   }
@@ -785,17 +788,22 @@ export class CommentRepository {
 
 ```typescript
 // ─── repositories/ReasoningSummaryRepository.ts ───
-import { ReasoningSummaryInsert, ReasoningSummaryRow } from '../models/ReasoningSummary';
-import { Pool } from 'pg';
+import {
+  ReasoningSummaryInsert,
+  ReasoningSummaryRow,
+} from "../models/ReasoningSummary";
+import { Pool } from "pg";
 
 export class ReasoningSummaryRepository {
   constructor(private pool: Pool) {}
 
-  async findByCommentId(commentId: number): Promise<ReasoningSummaryRow | null> {
+  async findByCommentId(
+    commentId: number,
+  ): Promise<ReasoningSummaryRow | null> {
     const { rows } = await this.pool.query(
       `SELECT * FROM reasoning_summaries
        WHERE comment_id = $1 AND expires_at > NOW()`,
-      [commentId]
+      [commentId],
     );
     return rows.length ? rows[0] : null;
   }
@@ -813,16 +821,21 @@ export class ReasoningSummaryRepository {
          updated_at = NOW(),
          expires_at = NOW() + INTERVAL '24 hours'
        RETURNING *`,
-      [data.commentId, data.summary, data.primaryClaim,
-       JSON.stringify(data.evidenceBlocks), data.coherenceScore]
+      [
+        data.commentId,
+        data.summary,
+        data.primaryClaim,
+        JSON.stringify(data.evidenceBlocks),
+        data.coherenceScore,
+      ],
     );
     return rows[0];
   }
 
   async deleteByCommentId(commentId: number): Promise<void> {
     await this.pool.query(
-      'DELETE FROM reasoning_summaries WHERE comment_id = $1',
-      [commentId]
+      "DELETE FROM reasoning_summaries WHERE comment_id = $1",
+      [commentId],
     );
   }
 }
@@ -832,10 +845,10 @@ export class ReasoningSummaryRepository {
 
 ```typescript
 // ─── services/MockAIAnalysisService.ts ───
-import { IAIAnalysisService } from './interfaces/IAIAnalysisService';
-import { Claim } from '../models/Claim';
-import { EvidenceBlock } from '../models/EvidenceBlock';
-import { AnalysisResult } from '../models/AnalysisResult';
+import { IAIAnalysisService } from "./interfaces/IAIAnalysisService";
+import { Claim } from "../models/Claim";
+import { EvidenceBlock } from "../models/EvidenceBlock";
+import { AnalysisResult } from "../models/AnalysisResult";
 
 /**
  * Deterministic mock — returns fixtures based on text length.
@@ -844,23 +857,31 @@ import { AnalysisResult } from '../models/AnalysisResult';
 export class MockAIAnalysisService implements IAIAnalysisService {
   async extractClaims(text: string): Promise<Claim[]> {
     return [
-      { id: 1, text: text.substring(0, 60), supportingEvidence: ['mock-ev-1'] },
+      { id: 1, text: text.substring(0, 60), supportingEvidence: ["mock-ev-1"] },
     ];
   }
 
   async extractEvidence(text: string): Promise<EvidenceBlock[]> {
-    const strength = text.length > 200 ? 'high' : text.length > 100 ? 'medium' : 'low';
+    const strength =
+      text.length > 200 ? "high" : text.length > 100 ? "medium" : "low";
     return [
-      { type: 'anecdote', content: 'Mock evidence from text analysis', strength },
+      {
+        type: "anecdote",
+        content: "Mock evidence from text analysis",
+        strength,
+      },
     ];
   }
 
-  async evaluateCoherence(_claims: Claim[], _evidence: EvidenceBlock[]): Promise<number> {
+  async evaluateCoherence(
+    _claims: Claim[],
+    _evidence: EvidenceBlock[],
+  ): Promise<number> {
     return 0.75; // deterministic
   }
 
   async generateSummary(analysis: AnalysisResult): Promise<string> {
-    const claimText = analysis.claims[0]?.text ?? 'No claims found';
+    const claimText = analysis.claims[0]?.text ?? "No claims found";
     return `Mock summary: Argues "${claimText}" with ${analysis.evidence.length} piece(s) of evidence.`;
   }
 }
@@ -976,14 +997,14 @@ Example:
 
 The seed script must mirror `frontend/src/mockData.js` to ensure dev parity. The 6 mock comments across posts 1–3 should be seeded with pre-generated reasoning summaries matching the existing `aiSummary` fields:
 
-| Comment ID | Post ID | Author | Existing `aiSummary` | Seed Summary? |
-|-----------|---------|--------|---------------------|---------------|
-| 1 | 1 | ReactFan42 | Yes (coherence 0.87) | Yes |
-| 2 | 1 | CSSPurist | Yes (coherence 0.72) | Yes |
-| 3 | 1 | FullStackDev | Yes (coherence 0.91) | Yes |
-| 4 | 2 | EdgeComputing | Yes (coherence 0.83) | Yes |
-| 5 | 2 | AISkeptic | Yes (coherence 0.88) | Yes |
-| 6 | 3 | UXResearcher | Yes (coherence 0.79) | Yes |
+| Comment ID | Post ID | Author        | Existing `aiSummary` | Seed Summary? |
+| ---------- | ------- | ------------- | -------------------- | ------------- |
+| 1          | 1       | ReactFan42    | Yes (coherence 0.87) | Yes           |
+| 2          | 1       | CSSPurist     | Yes (coherence 0.72) | Yes           |
+| 3          | 1       | FullStackDev  | Yes (coherence 0.91) | Yes           |
+| 4          | 2       | EdgeComputing | Yes (coherence 0.83) | Yes           |
+| 5          | 2       | AISkeptic     | Yes (coherence 0.88) | Yes           |
+| 6          | 3       | UXResearcher  | Yes (coherence 0.79) | Yes           |
 
 ---
 
@@ -991,21 +1012,21 @@ The seed script must mirror `frontend/src/mockData.js` to ensure dev parity. The
 
 ### Authentication & Authorization
 
-| Concern | Implementation |
-|---------|---------------|
-| **Auth method** | JWT (HS256) — token required in `Authorization: Bearer` header |
-| **Middleware** | `authMiddleware.ts` — verifies signature, expiry, and extracts `userId` onto `req.user` |
-| **Authorization** | Any authenticated user may request a reasoning summary for any comment (public content) |
+| Concern           | Implementation                                                                                                      |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **Auth method**   | JWT (HS256) — token required in `Authorization: Bearer` header                                                      |
+| **Middleware**    | `authMiddleware.ts` — verifies signature, expiry, and extracts `userId` onto `req.user`                             |
+| **Authorization** | Any authenticated user may request a reasoning summary for any comment (public content)                             |
 | **Rate limiting** | In-memory `Map<number, { count: number; windowStart: number }>` — 100 req/min/user; returns 429 with `retryAfterMs` |
 
 ### Data Protection
 
-| Layer | Measure |
-|-------|---------|
-| **In transit** | HTTPS / TLS 1.3 for all REST calls |
-| **At rest** | PostgreSQL storage-level encryption |
-| **AI service** | Comment text sent to OpenAI under enterprise DPA; in test/dev, `MockAIAnalysisService` sends nothing |
-| **Cache** | In-process `Map` — no network exposure (unlike Redis); data lost on process restart (acceptable at P4 scale) |
+| Layer          | Measure                                                                                                      |
+| -------------- | ------------------------------------------------------------------------------------------------------------ |
+| **In transit** | HTTPS / TLS 1.3 for all REST calls                                                                           |
+| **At rest**    | PostgreSQL storage-level encryption                                                                          |
+| **AI service** | Comment text sent to OpenAI under enterprise DPA; in test/dev, `MockAIAnalysisService` sends nothing         |
+| **Cache**      | In-process `Map` — no network exposure (unlike Redis); data lost on process restart (acceptable at P4 scale) |
 
 ### Privacy Considerations
 
@@ -1017,26 +1038,26 @@ The seed script must mirror `frontend/src/mockData.js` to ensure dev parity. The
 
 ### Compliance
 
-| Regulation | How Met |
-|-----------|---------|
-| **GDPR** | Cascade delete on comment removal; 24 h TTL; user can request data deletion |
-| **CCPA** | Minimum-necessary retention; no secondary use of summary data |
-| **AI Act** | Clear labeling of AI-generated content in UI |
+| Regulation | How Met                                                                     |
+| ---------- | --------------------------------------------------------------------------- |
+| **GDPR**   | Cascade delete on comment removal; 24 h TTL; user can request data deletion |
+| **CCPA**   | Minimum-necessary retention; no secondary use of summary data               |
+| **AI Act** | Clear labeling of AI-generated content in UI                                |
 
 ---
 
 ## Development Risks and Mitigations
 
-| # | Risk | Likelihood | Impact | Mitigation |
-|---|------|-----------|--------|------------|
-| 1 | **AI latency on first load** | High | UX — user sees spinner for 2–5 s | Frontend shows animated loading state (already in `ReasoningSummaryPanel.jsx`); pre-seed popular comments; cache aggressively (24 h TTL) |
-| 2 | **Mock ↔ production AI divergence** | Medium | Integration bugs on deploy | `MockAIAnalysisService` returns structurally identical DTOs; integration tests validate the `IAIAnalysisService` interface contract |
-| 3 | **In-memory cache lost on restart** | Medium | Cold-start latency spike | Acceptable at P4 scale (10 users); DB serves as persistent fallback; summaries regenerate lazily |
-| 4 | **Coherence score accuracy** | Medium | Misleading quality signals | Start with mock-era fixed scores; iterate prompt engineering post-MVP; add user-feedback loop later |
-| 5 | **OpenAI API rate limiting** | High | Service degradation | `MockAIAnalysisService` eliminates this in dev/test; in production: per-user rate limiter + 24 h cache means ≤ 1 OpenAI call per comment per day |
-| 6 | **Cache staleness on comment edit** | Low | User sees old summary after edit | Invalidate cache + DB row when comment is updated (`CommentController.update()` calls `ReasoningSummaryService.invalidateCache()`) |
-| 7 | **Prompt injection** | Low | Malicious comment text manipulates AI output | `CommentValidator.sanitizeText()` strips control characters; AI output is treated as untrusted display-only text (no HTML rendering) |
-| 8 | **10-user ceiling exceeded** | Low | Memory growth, potential OOM | `InMemoryCacheService.sweepExpired()` runs every 60 s; `maxEntries` guard on Map size (default 10 000) |
+| #   | Risk                                | Likelihood | Impact                                       | Mitigation                                                                                                                                       |
+| --- | ----------------------------------- | ---------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | **AI latency on first load**        | High       | UX — user sees spinner for 2–5 s             | Frontend shows animated loading state (already in `ReasoningSummaryPanel.jsx`); pre-seed popular comments; cache aggressively (24 h TTL)         |
+| 2   | **Mock ↔ production AI divergence** | Medium     | Integration bugs on deploy                   | `MockAIAnalysisService` returns structurally identical DTOs; integration tests validate the `IAIAnalysisService` interface contract              |
+| 3   | **In-memory cache lost on restart** | Medium     | Cold-start latency spike                     | Acceptable at P4 scale (10 users); DB serves as persistent fallback; summaries regenerate lazily                                                 |
+| 4   | **Coherence score accuracy**        | Medium     | Misleading quality signals                   | Start with mock-era fixed scores; iterate prompt engineering post-MVP; add user-feedback loop later                                              |
+| 5   | **OpenAI API rate limiting**        | High       | Service degradation                          | `MockAIAnalysisService` eliminates this in dev/test; in production: per-user rate limiter + 24 h cache means ≤ 1 OpenAI call per comment per day |
+| 6   | **Cache staleness on comment edit** | Low        | User sees old summary after edit             | Invalidate cache + DB row when comment is updated (`CommentController.update()` calls `ReasoningSummaryService.invalidateCache()`)               |
+| 7   | **Prompt injection**                | Low        | Malicious comment text manipulates AI output | `CommentValidator.sanitizeText()` strips control characters; AI output is treated as untrusted display-only text (no HTML rendering)             |
+| 8   | **10-user ceiling exceeded**        | Low        | Memory growth, potential OOM                 | `InMemoryCacheService.sweepExpired()` runs every 60 s; `maxEntries` guard on Map size (default 10 000)                                           |
 
 ---
 
@@ -1052,30 +1073,30 @@ All tests inject `MockAIAnalysisService` instead of the production `AIAnalysisSe
 
 ### Unit Tests
 
-| Test File | Class Under Test | Key Cases |
-|-----------|-----------------|-----------|
-| `ReasoningSummaryService.test.ts` | `ReasoningSummaryService` | Cache hit returns DTO; cache miss + DB hit returns & caches; cache miss + DB miss generates via AI; `invalidateCache` clears both |
-| `MockAIAnalysisService.test.ts` | `MockAIAnalysisService` | Returns valid `Claim[]`; returns valid `EvidenceBlock[]`; coherence in [0,1]; summary is non-empty string |
-| `InMemoryCacheService.test.ts` | `InMemoryCacheService` | `get` returns null for missing key; `get` returns null after TTL; `set` + `get` round-trip; `sweepExpired` evicts expired entries |
-| `CommentValidator.test.ts` | `CommentValidator` | Positive int passes; zero/negative/NaN/string throws; sanitize strips control chars |
-| `ReasoningSummaryRepository.test.ts` | `ReasoningSummaryRepository` | `upsert` inserts new row; `upsert` updates existing; `findByCommentId` respects `expires_at`; `deleteByCommentId` removes row |
+| Test File                            | Class Under Test             | Key Cases                                                                                                                         |
+| ------------------------------------ | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `ReasoningSummaryService.test.ts`    | `ReasoningSummaryService`    | Cache hit returns DTO; cache miss + DB hit returns & caches; cache miss + DB miss generates via AI; `invalidateCache` clears both |
+| `MockAIAnalysisService.test.ts`      | `MockAIAnalysisService`      | Returns valid `Claim[]`; returns valid `EvidenceBlock[]`; coherence in [0,1]; summary is non-empty string                         |
+| `InMemoryCacheService.test.ts`       | `InMemoryCacheService`       | `get` returns null for missing key; `get` returns null after TTL; `set` + `get` round-trip; `sweepExpired` evicts expired entries |
+| `CommentValidator.test.ts`           | `CommentValidator`           | Positive int passes; zero/negative/NaN/string throws; sanitize strips control chars                                               |
+| `ReasoningSummaryRepository.test.ts` | `ReasoningSummaryRepository` | `upsert` inserts new row; `upsert` updates existing; `findByCommentId` respects `expires_at`; `deleteByCommentId` removes row     |
 
 ### Integration Tests
 
-| Test File | Flow Tested |
-|-----------|------------|
-| `reasoning-summary.integration.test.ts` | Full HTTP flow: seed comment → `GET /api/v1/comments/:id/reasoning-summary` → assert 200 with correct DTO shape → second request hits cache |
-| `reasoning-summary-errors.integration.test.ts` | 401 without JWT; 400 with invalid ID; 404 with nonexistent comment; 429 after rate limit exceeded |
+| Test File                                      | Flow Tested                                                                                                                                 |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reasoning-summary.integration.test.ts`        | Full HTTP flow: seed comment → `GET /api/v1/comments/:id/reasoning-summary` → assert 200 with correct DTO shape → second request hits cache |
+| `reasoning-summary-errors.integration.test.ts` | 401 without JWT; 400 with invalid ID; 404 with nonexistent comment; 429 after rate limit exceeded                                           |
 
 ### Example Test (Unit)
 
 ```typescript
 // tests/unit/ReasoningSummaryService.test.ts
-import { ReasoningSummaryService } from '../../src/services/ReasoningSummaryService';
-import { MockAIAnalysisService } from '../../src/services/MockAIAnalysisService';
-import { InMemoryCacheService } from '../../src/services/InMemoryCacheService';
+import { ReasoningSummaryService } from "../../src/services/ReasoningSummaryService";
+import { MockAIAnalysisService } from "../../src/services/MockAIAnalysisService";
+import { InMemoryCacheService } from "../../src/services/InMemoryCacheService";
 
-describe('ReasoningSummaryService', () => {
+describe("ReasoningSummaryService", () => {
   let service: ReasoningSummaryService;
   let cache: InMemoryCacheService;
   let mockAI: MockAIAnalysisService;
@@ -1086,42 +1107,69 @@ describe('ReasoningSummaryService', () => {
     cache = new InMemoryCacheService();
     mockAI = new MockAIAnalysisService();
     mockCommentRepo = { getById: jest.fn() } as any;
-    mockSummaryRepo = { findByCommentId: jest.fn(), upsert: jest.fn(), deleteByCommentId: jest.fn() } as any;
-    service = new ReasoningSummaryService(mockAI, cache, mockCommentRepo, mockSummaryRepo);
+    mockSummaryRepo = {
+      findByCommentId: jest.fn(),
+      upsert: jest.fn(),
+      deleteByCommentId: jest.fn(),
+    } as any;
+    service = new ReasoningSummaryService(
+      mockAI,
+      cache,
+      mockCommentRepo,
+      mockSummaryRepo,
+    );
   });
 
   afterEach(() => cache.destroy());
 
-  it('returns cached summary on cache hit', async () => {
-    const dto = { commentId: 1, summary: 'cached', primaryClaim: 'c', evidenceBlocks: [], coherenceScore: 0.8, generatedAt: new Date() };
-    await cache.set('reasoning_summary:1', dto, 86400);
+  it("returns cached summary on cache hit", async () => {
+    const dto = {
+      commentId: 1,
+      summary: "cached",
+      primaryClaim: "c",
+      evidenceBlocks: [],
+      coherenceScore: 0.8,
+      generatedAt: new Date(),
+    };
+    await cache.set("reasoning_summary:1", dto, 86400);
 
     const result = await service.getSummary(1);
     expect(result).toEqual(dto);
     expect(mockCommentRepo.getById).not.toHaveBeenCalled();
   });
 
-  it('generates and caches on full miss', async () => {
+  it("generates and caches on full miss", async () => {
     mockSummaryRepo.findByCommentId.mockResolvedValue(null);
-    mockCommentRepo.getById.mockResolvedValue({ id: 1, text: 'Some argument text', postId: 1, authorId: 1 } as any);
-    mockSummaryRepo.upsert.mockImplementation(async (data) => ({ ...data, id: 99, created_at: new Date(), updated_at: new Date(), expires_at: new Date() }));
+    mockCommentRepo.getById.mockResolvedValue({
+      id: 1,
+      text: "Some argument text",
+      postId: 1,
+      authorId: 1,
+    } as any);
+    mockSummaryRepo.upsert.mockImplementation(async (data) => ({
+      ...data,
+      id: 99,
+      created_at: new Date(),
+      updated_at: new Date(),
+      expires_at: new Date(),
+    }));
 
     const result = await service.getSummary(1);
 
     expect(result.commentId).toBe(1);
-    expect(result.summary).toContain('Mock summary');
+    expect(result.summary).toContain("Mock summary");
     expect(result.coherenceScore).toBe(0.75);
     expect(mockSummaryRepo.upsert).toHaveBeenCalledTimes(1);
-    expect(await cache.exists('reasoning_summary:1')).toBe(true);
+    expect(await cache.exists("reasoning_summary:1")).toBe(true);
   });
 
-  it('invalidateCache removes from cache and DB', async () => {
-    await cache.set('reasoning_summary:1', { commentId: 1 }, 86400);
+  it("invalidateCache removes from cache and DB", async () => {
+    await cache.set("reasoning_summary:1", { commentId: 1 }, 86400);
     mockSummaryRepo.deleteByCommentId.mockResolvedValue(undefined);
 
     await service.invalidateCache(1);
 
-    expect(await cache.exists('reasoning_summary:1')).toBe(false);
+    expect(await cache.exists("reasoning_summary:1")).toBe(false);
     expect(mockSummaryRepo.deleteByCommentId).toHaveBeenCalledWith(1);
   });
 });
@@ -1199,8 +1247,8 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      '/api': {
-        target: 'http://localhost:4000',
+      "/api": {
+        target: "http://localhost:4000",
         changeOrigin: true,
       },
     },
@@ -1328,15 +1376,15 @@ RATE_LIMIT_MAX_REQUESTS=100     # per user per window
 
 ## Appendix D — Glossary
 
-| Term | Definition |
-|------|-----------|
-| **Reasoning Summary** | An AI-generated analysis of a single comment, containing its primary claim, supporting evidence, and a coherence score |
-| **Coherence Score** | A number in [0, 1] indicating how logically consistent the comment's argument is |
-| **Evidence Block** | A structured piece of evidence extracted from comment text, typed (study/data/anecdote/authority/other) and rated (high/medium/low) |
-| **`IAIAnalysisService`** | The shared interface abstracting all LLM calls; has production (OpenAI) and mock implementations |
-| **InMemoryCacheService** | A `Map`-based in-process cache that replaces Redis under P4 constraints |
-| **P4** | The set of architectural constraints for this project: 10 users, no Redis/Bull, mocked AI, numeric IDs, single-tenant PostgreSQL |
-| **DTO** | Data Transfer Object — an immutable structure for transferring data between layers |
+| Term                     | Definition                                                                                                                          |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **Reasoning Summary**    | An AI-generated analysis of a single comment, containing its primary claim, supporting evidence, and a coherence score              |
+| **Coherence Score**      | A number in [0, 1] indicating how logically consistent the comment's argument is                                                    |
+| **Evidence Block**       | A structured piece of evidence extracted from comment text, typed (study/data/anecdote/authority/other) and rated (high/medium/low) |
+| **`IAIAnalysisService`** | The shared interface abstracting all LLM calls; has production (OpenAI) and mock implementations                                    |
+| **InMemoryCacheService** | A `Map`-based in-process cache that replaces Redis under P4 constraints                                                             |
+| **P4**                   | The set of architectural constraints for this project: 10 users, no Redis/Bull, mocked AI, numeric IDs, single-tenant PostgreSQL    |
+| **DTO**                  | Data Transfer Object — an immutable structure for transferring data between layers                                                  |
 
 ---
 
