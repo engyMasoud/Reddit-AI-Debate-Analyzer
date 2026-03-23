@@ -3,6 +3,7 @@
 > **Scope:** Single backend powering **US1** (Inline AI Reasoning Summary, REST) and **US3** (Real-Time Writing Feedback, WebSocket + REST).
 >
 > **P4 Constraints in Effect:**
+>
 > - Exactly **10 simultaneous frontend users** — no Redis, no Bull; use native Node.js `Map`/`Set`.
 > - All OpenAI calls behind an **`IAIAnalysisService` interface**, mocked for testing.
 > - Single-tenant **PostgreSQL**; table name is **`posts`** (not threads); all base-table PKs are **numeric** (`SERIAL`/`INTEGER`).
@@ -15,13 +16,13 @@
 
 A single **Node.js 18 / Express 4 / TypeScript 5** process hosts:
 
-| Concern | Transport | Entry Point |
-|---------|-----------|-------------|
-| CRUD (posts, comments, subreddits, users, auth) | REST | `GET/POST /api/v1/*` |
-| AI Reasoning Summary (US1) | REST | `GET /api/v1/comments/:commentId/reasoning-summary` |
-| Draft Feedback — one-shot (US3) | REST | `POST /api/v1/composer/draft-feedback` |
-| Draft Feedback — real-time (US3) | WebSocket | Socket.IO namespace `/composer` |
-| Draft/History management (US3) | REST | `POST /api/v1/composer/drafts`, `GET /api/v1/composer/draft-feedback/history` |
+| Concern                                         | Transport | Entry Point                                                                   |
+| ----------------------------------------------- | --------- | ----------------------------------------------------------------------------- |
+| CRUD (posts, comments, subreddits, users, auth) | REST      | `GET/POST /api/v1/*`                                                          |
+| AI Reasoning Summary (US1)                      | REST      | `GET /api/v1/comments/:commentId/reasoning-summary`                           |
+| Draft Feedback — one-shot (US3)                 | REST      | `POST /api/v1/composer/draft-feedback`                                        |
+| Draft Feedback — real-time (US3)                | WebSocket | Socket.IO namespace `/composer`                                               |
+| Draft/History management (US3)                  | REST      | `POST /api/v1/composer/drafts`, `GET /api/v1/composer/draft-feedback/history` |
 
 A **single HTTP server** is created (`http.createServer(expressApp)`), then shared between Express and Socket.IO. There is no separate WebSocket port; Socket.IO upgrades on the same `:4000` port.
 
@@ -116,6 +117,7 @@ InMemoryCacheService
 ```
 
 Key patterns:
+
 - `reasoning_summary:<commentId>` — TTL 86 400 s (24 h)
 - `draft_feedback:<sha256-of-draftText>` — TTL 3 600 s (1 h)
 
@@ -147,21 +149,21 @@ Both US1 and US3 depend on the **same** `IAIAnalysisService` instance (injected 
 
 ### 1.8 Technology Stack (Harmonized, P4-adjusted)
 
-| Layer | Technology | Version | Notes |
-|-------|-----------|---------|-------|
-| Runtime | Node.js | 18.x LTS | |
-| Framework | Express.js | 4.x | |
-| Language | TypeScript | 5.x | |
-| Database | PostgreSQL | 14+ | Single tenant, numeric PKs |
-| Cache | **In-memory `Map`** | N/A | **Replaces Redis** (P4) |
-| Job Queue | **`setTimeout` / `Promise.all`** | N/A | **Replaces Bull** (P4) |
-| AI | OpenAI API (GPT-4) | Latest | Behind `IAIAnalysisService` |
-| WebSocket | Socket.IO | 4.x | Namespace `/composer` |
-| NLP (fallback) | natural / compromise | Latest | Local heuristic detectors |
-| Testing | Jest | 29.x | + `MockAIAnalysisService` |
-| Auth | JWT (jsonwebtoken) | Latest | HS256 |
-| Validation | zod | 3.x | Schema-based request validation |
-| ORM/Query | pg (node-postgres) | 8.x | Raw SQL + repository pattern |
+| Layer          | Technology                       | Version  | Notes                           |
+| -------------- | -------------------------------- | -------- | ------------------------------- |
+| Runtime        | Node.js                          | 18.x LTS |                                 |
+| Framework      | Express.js                       | 4.x      |                                 |
+| Language       | TypeScript                       | 5.x      |                                 |
+| Database       | PostgreSQL                       | 14+      | Single tenant, numeric PKs      |
+| Cache          | **In-memory `Map`**              | N/A      | **Replaces Redis** (P4)         |
+| Job Queue      | **`setTimeout` / `Promise.all`** | N/A      | **Replaces Bull** (P4)          |
+| AI             | OpenAI API (GPT-4)               | Latest   | Behind `IAIAnalysisService`     |
+| WebSocket      | Socket.IO                        | 4.x      | Namespace `/composer`           |
+| NLP (fallback) | natural / compromise             | Latest   | Local heuristic detectors       |
+| Testing        | Jest                             | 29.x     | + `MockAIAnalysisService`       |
+| Auth           | JWT (jsonwebtoken)               | Latest   | HS256                           |
+| Validation     | zod                              | 3.x      | Schema-based request validation |
+| ORM/Query      | pg (node-postgres)               | 8.x      | Raw SQL + repository pattern    |
 
 ### 1.9 Unified Mermaid Diagrams
 
@@ -1120,10 +1122,13 @@ Single point of contact for all LLM interaction.
 
 ```typescript
 interface IAIAnalysisService {
-    extractClaims(text: string): Promise<Claim[]>;
-    extractEvidence(text: string): Promise<EvidenceBlock[]>;
-    evaluateCoherence(claims: Claim[], evidence: EvidenceBlock[]): Promise<number>;
-    generateSummary(analysis: AnalysisResult): Promise<string>;
+  extractClaims(text: string): Promise<Claim[]>;
+  extractEvidence(text: string): Promise<EvidenceBlock[]>;
+  evaluateCoherence(
+    claims: Claim[],
+    evidence: EvidenceBlock[],
+  ): Promise<number>;
+  generateSummary(analysis: AnalysisResult): Promise<string>;
 }
 ```
 
@@ -1170,37 +1175,40 @@ The **primary state-holding class** in the Writing Feedback module is `WritingFe
 
 ```typescript
 class WritingFeedbackSessionManager {
-    // -- Rep --
-    private sessions: Map<number, {
-        socketId:       string;          // Socket.IO socket id
-        currentDraft:   string;          // latest draft text received
-        lastFeedback:   FeedbackResult | null;  // most recent analysis result
-        analysisInFlight: boolean;       // true while an analysis Promise is pending
-        lastActivityAt:   number;        // Date.now() of last event
-    }>;
-    private readonly maxSessions: number;        // upper bound, default 10
-    private readonly sessionTimeoutMs: number;   // inactivity timeout, default 30 min
+  // -- Rep --
+  private sessions: Map<
+    number,
+    {
+      socketId: string; // Socket.IO socket id
+      currentDraft: string; // latest draft text received
+      lastFeedback: FeedbackResult | null; // most recent analysis result
+      analysisInFlight: boolean; // true while an analysis Promise is pending
+      lastActivityAt: number; // Date.now() of last event
+    }
+  >;
+  private readonly maxSessions: number; // upper bound, default 10
+  private readonly sessionTimeoutMs: number; // inactivity timeout, default 30 min
 }
 ```
 
 **Rep components:**
 
-| Field | Type | Domain |
-|-------|------|--------|
-| `sessions` | `Map<number, SessionEntry>` | keys ⊂ ℤ⁺ (valid user IDs); size ∈ [0, `maxSessions`] |
-| `SessionEntry.socketId` | `string` | non-empty string matching Socket.IO format |
-| `SessionEntry.currentDraft` | `string` | any string (may be empty) |
-| `SessionEntry.lastFeedback` | `FeedbackResult \| null` | either `null` or a well-formed `FeedbackResult` with `score ∈ [0,1]` |
-| `SessionEntry.analysisInFlight` | `boolean` | exactly `true` or `false` |
-| `SessionEntry.lastActivityAt` | `number` | positive integer (epoch milliseconds) |
-| `maxSessions` | `number` | positive integer, default 10 |
-| `sessionTimeoutMs` | `number` | positive integer, default 1 800 000 (30 min) |
+| Field                           | Type                        | Domain                                                               |
+| ------------------------------- | --------------------------- | -------------------------------------------------------------------- |
+| `sessions`                      | `Map<number, SessionEntry>` | keys ⊂ ℤ⁺ (valid user IDs); size ∈ [0, `maxSessions`]                |
+| `SessionEntry.socketId`         | `string`                    | non-empty string matching Socket.IO format                           |
+| `SessionEntry.currentDraft`     | `string`                    | any string (may be empty)                                            |
+| `SessionEntry.lastFeedback`     | `FeedbackResult \| null`    | either `null` or a well-formed `FeedbackResult` with `score ∈ [0,1]` |
+| `SessionEntry.analysisInFlight` | `boolean`                   | exactly `true` or `false`                                            |
+| `SessionEntry.lastActivityAt`   | `number`                    | positive integer (epoch milliseconds)                                |
+| `maxSessions`                   | `number`                    | positive integer, default 10                                         |
+| `sessionTimeoutMs`              | `number`                    | positive integer, default 1 800 000 (30 min)                         |
 
 ### 4.3 Space of Abstract Values
 
 Abstractly, a `WritingFeedbackSessionManager` represents:
 
-> A **finite partial function** *f : UserId → ComposerSession* from user IDs to composer sessions, where each session captures the user's current draft, its latest AI feedback (if any), and whether an analysis is currently running. The function's domain has cardinality ≤ *N* (the max concurrency), and each session that has been inactive longer than *T* milliseconds is considered expired.
+> A **finite partial function** _f : UserId → ComposerSession_ from user IDs to composer sessions, where each session captures the user's current draft, its latest AI feedback (if any), and whether an analysis is currently running. The function's domain has cardinality ≤ _N_ (the max concurrency), and each session that has been inactive longer than _T_ milliseconds is considered expired.
 
 In set-builder notation:
 
@@ -1260,50 +1268,50 @@ AF(r) = the partial function f where:
                 )
 ```
 
-In words: *the abstract value is the set of non-expired sessions, where each maps a user ID to their current drafting state.* Expired sessions are invisible to the abstract value — they exist in `r.sessions` only until the next sweep.
+In words: _the abstract value is the set of non-expired sessions, where each maps a user ID to their current drafting state._ Expired sessions are invisible to the abstract value — they exist in `r.sessions` only until the next sweep.
 
 ### 4.6 Safety from Rep Exposure
 
 The class ensures no client can obtain a direct reference to its mutable internal state:
 
-| Technique | Where Applied |
-|-----------|---------------|
-| **`private` fields** | `sessions`, `maxSessions`, `sessionTimeoutMs` are all `private readonly` (except `sessions` which is `private`). No public field exposes the Map. |
-| **Defensive copying on output** | `getSession(userId)` returns a deep clone (via `structuredClone`) of the `SessionEntry`, never the Map entry itself. |
-| **Defensive copying on input** | `updateFeedback(userId, result)` clones the incoming `FeedbackResult` before storing, so the caller cannot mutate it after the fact. |
-| **Immutable config** | `maxSessions` and `sessionTimeoutMs` are `readonly`; set once in the constructor, never changed. |
-| **No iterator exposure** | There is no `getAll()` that returns the Map. `getActiveUserIds()` returns a `number[]` snapshot, not a live reference. |
+| Technique                       | Where Applied                                                                                                                                     |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`private` fields**            | `sessions`, `maxSessions`, `sessionTimeoutMs` are all `private readonly` (except `sessions` which is `private`). No public field exposes the Map. |
+| **Defensive copying on output** | `getSession(userId)` returns a deep clone (via `structuredClone`) of the `SessionEntry`, never the Map entry itself.                              |
+| **Defensive copying on input**  | `updateFeedback(userId, result)` clones the incoming `FeedbackResult` before storing, so the caller cannot mutate it after the fact.              |
+| **Immutable config**            | `maxSessions` and `sessionTimeoutMs` are `readonly`; set once in the constructor, never changed.                                                  |
+| **No iterator exposure**        | There is no `getAll()` that returns the Map. `getActiveUserIds()` returns a `number[]` snapshot, not a live reference.                            |
 
 **Example public API (returns only copies / primitives):**
 
 ```typescript
 class WritingFeedbackSessionManager {
-    /** Register a new socket connection for a user. */
-    registerSession(userId: number, socketId: string): boolean;
+  /** Register a new socket connection for a user. */
+  registerSession(userId: number, socketId: string): boolean;
 
-    /** Remove session on disconnect. */
-    removeSession(userId: number): void;
+  /** Remove session on disconnect. */
+  removeSession(userId: number): void;
 
-    /** Update the draft text for a user. Returns false if no session. */
-    updateDraft(userId: number, draftText: string): boolean;
+  /** Update the draft text for a user. Returns false if no session. */
+  updateDraft(userId: number, draftText: string): boolean;
 
-    /** Store latest feedback. Clones input. Sets analysisInFlight = false. */
-    updateFeedback(userId: number, feedback: FeedbackResult): boolean;
+  /** Store latest feedback. Clones input. Sets analysisInFlight = false. */
+  updateFeedback(userId: number, feedback: FeedbackResult): boolean;
 
-    /** Mark that an analysis is in progress. Prevents duplicate concurrent runs. */
-    markAnalysisInFlight(userId: number): boolean;
+  /** Mark that an analysis is in progress. Prevents duplicate concurrent runs. */
+  markAnalysisInFlight(userId: number): boolean;
 
-    /** Is analysis already running for this user? */
-    isAnalysisInFlight(userId: number): boolean;
+  /** Is analysis already running for this user? */
+  isAnalysisInFlight(userId: number): boolean;
 
-    /** Get a COPY of the session, or null. */
-    getSession(userId: number): SessionEntry | null;
+  /** Get a COPY of the session, or null. */
+  getSession(userId: number): SessionEntry | null;
 
-    /** Get active (non-expired) user IDs. Returns a new array. */
-    getActiveUserIds(): number[];
+  /** Get active (non-expired) user IDs. Returns a new array. */
+  getActiveUserIds(): number[];
 
-    /** Evict sessions that have been inactive longer than sessionTimeoutMs. */
-    sweepExpiredSessions(): number;  // returns count evicted
+  /** Evict sessions that have been inactive longer than sessionTimeoutMs. */
+  sweepExpiredSessions(): number; // returns count evicted
 }
 ```
 
@@ -1313,35 +1321,35 @@ Every mutator calls `checkRep()` at the end (in debug mode), and every accessor 
 
 ## Appendix A — Complete REST Endpoint Table
 
-| # | Method | Endpoint | Module | US |
-|---|--------|----------|--------|----|
-| 1 | POST | `/api/v1/auth/register` | Core | — |
-| 2 | POST | `/api/v1/auth/login` | Core | — |
-| 3 | GET | `/api/v1/users/me` | Core | — |
-| 4 | GET | `/api/v1/subreddits` | Core | — |
-| 5 | POST | `/api/v1/subreddits/:id/join` | Core | — |
-| 6 | GET | `/api/v1/posts` | Core | — |
-| 7 | GET | `/api/v1/posts/:id` | Core | — |
-| 8 | POST | `/api/v1/posts` | Core | — |
-| 9 | POST | `/api/v1/posts/:id/vote` | Core | — |
-| 10 | GET | `/api/v1/posts/:id/comments` | Core | — |
-| 11 | POST | `/api/v1/posts/:id/comments` | Core | — |
-| 12 | POST | `/api/v1/comments/:id/vote` | Core | — |
-| 13 | POST | `/api/v1/comments/:id/report` | Core | — |
-| 14 | GET | `/api/v1/comments/:commentId/reasoning-summary` | US1 | US1 |
-| 15 | POST | `/api/v1/composer/draft-feedback` | US3 | US3 |
-| 16 | GET | `/api/v1/composer/draft-feedback/history` | US3 | US3 |
-| 17 | POST | `/api/v1/composer/drafts` | US3 | US3 |
+| #   | Method | Endpoint                                        | Module | US  |
+| --- | ------ | ----------------------------------------------- | ------ | --- |
+| 1   | POST   | `/api/v1/auth/register`                         | Core   | —   |
+| 2   | POST   | `/api/v1/auth/login`                            | Core   | —   |
+| 3   | GET    | `/api/v1/users/me`                              | Core   | —   |
+| 4   | GET    | `/api/v1/subreddits`                            | Core   | —   |
+| 5   | POST   | `/api/v1/subreddits/:id/join`                   | Core   | —   |
+| 6   | GET    | `/api/v1/posts`                                 | Core   | —   |
+| 7   | GET    | `/api/v1/posts/:id`                             | Core   | —   |
+| 8   | POST   | `/api/v1/posts`                                 | Core   | —   |
+| 9   | POST   | `/api/v1/posts/:id/vote`                        | Core   | —   |
+| 10  | GET    | `/api/v1/posts/:id/comments`                    | Core   | —   |
+| 11  | POST   | `/api/v1/posts/:id/comments`                    | Core   | —   |
+| 12  | POST   | `/api/v1/comments/:id/vote`                     | Core   | —   |
+| 13  | POST   | `/api/v1/comments/:id/report`                   | Core   | —   |
+| 14  | GET    | `/api/v1/comments/:commentId/reasoning-summary` | US1    | US1 |
+| 15  | POST   | `/api/v1/composer/draft-feedback`               | US3    | US3 |
+| 16  | GET    | `/api/v1/composer/draft-feedback/history`       | US3    | US3 |
+| 17  | POST   | `/api/v1/composer/drafts`                       | US3    | US3 |
 
 ## Appendix B — WebSocket Event Table (Namespace: `/composer`)
 
-| Direction | Event | Payload | US |
-|-----------|-------|---------|-----|
-| Client → Server | `draft:analyze` | `{ draftText: string, contextId: number }` | US3 |
-| Client → Server | `draft:save` | `{ id?: number, text: string, contextId: number }` | US3 |
+| Direction       | Event             | Payload                                                                                                   | US  |
+| --------------- | ----------------- | --------------------------------------------------------------------------------------------------------- | --- |
+| Client → Server | `draft:analyze`   | `{ draftText: string, contextId: number }`                                                                | US3 |
+| Client → Server | `draft:save`      | `{ id?: number, text: string, contextId: number }`                                                        | US3 |
 | Server → Client | `feedback:result` | `{ feedbackId: number, issues: Issue[], score: number, suggestions: Suggestion[], goodPoints: string[] }` | US3 |
-| Server → Client | `feedback:error` | `{ message: string, code: string }` | US3 |
-| Server → Client | `draft:saved` | `{ id: number, createdAt: string, expiresAt: string }` | US3 |
+| Server → Client | `feedback:error`  | `{ message: string, code: string }`                                                                       | US3 |
+| Server → Client | `draft:saved`     | `{ id: number, createdAt: string, expiresAt: string }`                                                    | US3 |
 
 ## Appendix C — Environment Variables
 
@@ -1376,10 +1384,10 @@ RATE_LIMIT_MAX_REQUESTS=100
 
 ## Appendix D — Key Discrepancy Resolutions
 
-| # | Issue | Resolution |
-|---|-------|------------|
-| 9.1 | "threads" vs "posts" | **Use `posts` everywhere.** DB table is `posts`; all API routes use `/posts/:id`. The original DS2 `threadId` param is aliased to `postId`. |
-| 9.4 | ID format (UUID vs numeric vs string) | **Numeric `SERIAL` for all base tables.** Matches frontend `mockData.js` (ids 1, 2, 3…). AI-specific tables also use `SERIAL`. |
-| 9.6 | `aiSummary` inline vs separate | **Separate lazy-load.** Comments endpoint returns `aiSummary: null`; frontend calls `GET /comments/:id/reasoning-summary` on expand. |
-| 9.9 | Port allocation | Backend on `:4000`, frontend Vite on `:3000`. Vite proxy: `/api → http://localhost:4000`. |
-| P4 | Redis / Bull replacement | `InMemoryCacheService` (Map) and `Promise.all` / `setTimeout` replace Redis and Bull respectively. |
+| #   | Issue                                 | Resolution                                                                                                                                  |
+| --- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| 9.1 | "threads" vs "posts"                  | **Use `posts` everywhere.** DB table is `posts`; all API routes use `/posts/:id`. The original DS2 `threadId` param is aliased to `postId`. |
+| 9.4 | ID format (UUID vs numeric vs string) | **Numeric `SERIAL` for all base tables.** Matches frontend `mockData.js` (ids 1, 2, 3…). AI-specific tables also use `SERIAL`.              |
+| 9.6 | `aiSummary` inline vs separate        | **Separate lazy-load.** Comments endpoint returns `aiSummary: null`; frontend calls `GET /comments/:id/reasoning-summary` on expand.        |
+| 9.9 | Port allocation                       | Backend on `:4000`, frontend Vite on `:3000`. Vite proxy: `/api → http://localhost:4000`.                                                   |
+| P4  | Redis / Bull replacement              | `InMemoryCacheService` (Map) and `Promise.all` / `setTimeout` replace Redis and Bull respectively.                                          |
