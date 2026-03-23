@@ -163,6 +163,646 @@ Both US1 and US3 depend on the **same** `IAIAnalysisService` instance (injected 
 | Validation | zod | 3.x | Schema-based request validation |
 | ORM/Query | pg (node-postgres) | 8.x | Raw SQL + repository pattern |
 
+### 1.9 Unified Mermaid Diagrams
+
+The following diagrams provide a visual reference for the harmonized backend, uniting components from **US1** (Inline AI Reasoning Summary) and **US3** (Real-Time Writing Feedback) into a single architectural picture.
+
+#### 1.9.1 Architecture Diagram
+
+```mermaid
+graph TB
+    subgraph Client ["Client (Browser — React 18 + Vite :3000)"]
+        PD["PostDetail.jsx"]
+        RSP["ReasoningSummaryPanel.jsx"]
+        CWF["ComposerWithFeedback.jsx"]
+        PD -->|renders| RSP
+        PD -->|renders| CWF
+    end
+
+    RSP -->|"GET /api/v1/comments/:commentId/reasoning-summary<br/>Authorization: Bearer JWT"| API
+    CWF -->|"POST /api/v1/composer/draft-feedback<br/>Authorization: Bearer JWT"| API
+    CWF <-->|"Socket.IO /composer<br/>auth: { token: JWT }<br/>Events: draft:analyze ↔ feedback:result"| WS
+
+    subgraph Backend ["Backend Server (Node.js 18 / Express 4 — :4000)"]
+        API["API Routes Layer<br/>reasoningSummary.routes.ts<br/>composer.routes.ts"]
+        WS["Socket.IO Namespace<br/>/composer<br/>composerNamespace.ts"]
+        AUTH["authMiddleware.ts<br/>(JWT verify)"]
+        RL["rateLimiter.ts<br/>(in-memory Map)"]
+
+        subgraph US1_Ctrl ["US1 Controllers"]
+            RS_CTRL["ReasoningSummaryController"]
+        end
+        subgraph US3_Ctrl ["US3 Controllers"]
+            WF_CTRL["WritingFeedbackController"]
+        end
+
+        SM["WritingFeedbackSessionManager<br/>(Map&lt;userId, SessionEntry&gt;)"]
+
+        subgraph US1_Svc ["US1 Services"]
+            RS_SVC["ReasoningSummaryService"]
+        end
+        subgraph US3_Svc ["US3 Services"]
+            WF_SVC["WritingFeedbackService"]
+            CLD["CircularLogicDetector"]
+            WED["WeakEvidenceDetector"]
+            UCD["UnsupportedClaimsDetector"]
+        end
+
+        subgraph Shared ["Shared Infrastructure"]
+            CACHE["InMemoryCacheService<br/>(Map&lt;string, {value, expiresAt}&gt;)"]
+            AI["IAIAnalysisService<br/>«interface»"]
+            MOCK["MockAIAnalysisService<br/>(deterministic fixtures)"]
+            PROD["AIAnalysisService<br/>(OpenAI GPT-4)"]
+        end
+
+        API --> AUTH --> RL
+        RL --> RS_CTRL
+        RL --> WF_CTRL
+        WS --> AUTH
+        WS --> SM
+        SM --> WF_SVC
+        RS_CTRL --> RS_SVC
+        WF_CTRL --> WF_SVC
+        RS_SVC --> CACHE
+        RS_SVC --> AI
+        WF_SVC --> CACHE
+        WF_SVC --> AI
+        WF_SVC --> CLD
+        WF_SVC --> WED
+        WF_SVC --> UCD
+        CLD --> AI
+        UCD --> AI
+        AI -.->|implements| MOCK
+        AI -.->|implements| PROD
+    end
+
+    subgraph DB ["PostgreSQL 14+"]
+        COMMENTS["comments<br/>(SERIAL PK)"]
+        SUMMARIES["reasoning_summaries<br/>(SERIAL PK, FK → comments)"]
+        DRAFTS["drafts<br/>(SERIAL PK, FK → users)"]
+        FEEDBACK["feedback_logs<br/>(SERIAL PK, FK → users, drafts)"]
+    end
+
+    RS_SVC -->|"CommentRepository.getById(id)"| COMMENTS
+    RS_SVC -->|"ReasoningSummaryRepository.upsert()"| SUMMARIES
+    WF_SVC -->|"DraftRepository.save()"| DRAFTS
+    WF_SVC -->|"FeedbackLogRepository.save()"| FEEDBACK
+
+    style MOCK fill:#d4edda,stroke:#28a745
+    style PROD fill:#fff3cd,stroke:#ffc107
+    style CACHE fill:#e2e3f1,stroke:#6c63ff
+    style WS fill:#ffe0e0,stroke:#e74c3c
+    style SM fill:#ffe0e0,stroke:#e74c3c
+```
+
+#### 1.9.2 Class Hierarchy Diagram
+
+```mermaid
+classDiagram
+    %% === US1 Controllers ===
+    class ReasoningSummaryController {
+        -reasoningSummaryService: IReasoningSummaryService
+        +getSummary(req, res): Promise~void~
+    }
+
+    %% === US3 Controllers ===
+    class WritingFeedbackController {
+        -writingFeedbackService: IWritingFeedbackService
+        -draftRepository: DraftRepository
+        -feedbackLogRepository: FeedbackLogRepository
+        +analyzeDraft(req, res): Promise~void~
+        +getFeedbackHistory(req, res): Promise~void~
+        +saveDraft(req, res): Promise~void~
+    }
+
+    %% === US1 Service Interface ===
+    class IReasoningSummaryService {
+        <<interface>>
+        +getSummary(commentId: number): Promise~ReasoningSummaryDTO~
+        +generateAndCacheSummary(comment: Comment): Promise~ReasoningSummaryDTO~
+        +invalidateCache(commentId: number): Promise~void~
+    }
+
+    class ReasoningSummaryService {
+        -aiService: IAIAnalysisService
+        -cache: ICacheService
+        -commentRepo: CommentRepository
+        -summaryRepo: ReasoningSummaryRepository
+        +getSummary(commentId: number): Promise~ReasoningSummaryDTO~
+        +generateAndCacheSummary(comment: Comment): Promise~ReasoningSummaryDTO~
+        +invalidateCache(commentId: number): Promise~void~
+        -buildDTO(row: DBRow): ReasoningSummaryDTO
+    }
+
+    %% === US3 Service Interface ===
+    class IWritingFeedbackService {
+        <<interface>>
+        +analyzeDraft(text: string): Promise~FeedbackResult~
+    }
+
+    class WritingFeedbackService {
+        -aiService: IAIAnalysisService
+        -cache: ICacheService
+        -circularLogicDetector: CircularLogicDetector
+        -weakEvidenceDetector: WeakEvidenceDetector
+        -unsupportedClaimsDetector: UnsupportedClaimsDetector
+        -feedbackLogRepo: FeedbackLogRepository
+        +analyzeDraft(text: string): Promise~FeedbackResult~
+        -aggregateFeedback(issues: Issue[][]): FeedbackResult
+        -computeScore(issues: Issue[]): number
+    }
+
+    class WritingFeedbackSessionManager {
+        -sessions: Map~number_SessionEntry~
+        -maxSessions: number
+        -sessionTimeoutMs: number
+        +registerSession(userId: number, socketId: string): boolean
+        +removeSession(userId: number): void
+        +updateDraft(userId: number, draftText: string): boolean
+        +updateFeedback(userId: number, feedback: FeedbackResult): boolean
+        +markAnalysisInFlight(userId: number): boolean
+        +isAnalysisInFlight(userId: number): boolean
+        +getSession(userId: number): SessionEntry or null
+        +getActiveUserIds(): number[]
+        +sweepExpiredSessions(): number
+        -checkRep(): void
+    }
+
+    %% === Shared AI Service ===
+    class IAIAnalysisService {
+        <<interface>>
+        +extractClaims(text: string): Promise~Claim[]~
+        +extractEvidence(text: string): Promise~EvidenceBlock[]~
+        +evaluateCoherence(claims: Claim[], evidence: EvidenceBlock[]): Promise~number~
+        +generateSummary(analysis: AnalysisResult): Promise~string~
+    }
+
+    class AIAnalysisService {
+        -openaiClient: OpenAI
+        -model: string
+        +extractClaims(text: string): Promise~Claim[]~
+        +extractEvidence(text: string): Promise~EvidenceBlock[]~
+        +evaluateCoherence(claims: Claim[], evidence: EvidenceBlock[]): Promise~number~
+        +generateSummary(analysis: AnalysisResult): Promise~string~
+    }
+
+    class MockAIAnalysisService {
+        -fixtures: Map~string_AnalysisResult~
+        +extractClaims(text: string): Promise~Claim[]~
+        +extractEvidence(text: string): Promise~EvidenceBlock[]~
+        +evaluateCoherence(claims: Claim[], evidence: EvidenceBlock[]): Promise~number~
+        +generateSummary(analysis: AnalysisResult): Promise~string~
+    }
+
+    %% === Shared Cache ===
+    class ICacheService {
+        <<interface>>
+        +get(key: string): Promise~object_or_null~
+        +set(key: string, value: object, ttl: number): Promise~void~
+        +delete(key: string): Promise~void~
+        +exists(key: string): Promise~boolean~
+    }
+
+    class InMemoryCacheService {
+        -store: Map~string_CacheEntry~
+        -sweepIntervalId: NodeJS.Timeout
+        +get(key: string): Promise~object_or_null~
+        +set(key: string, value: object, ttl: number): Promise~void~
+        +delete(key: string): Promise~void~
+        +exists(key: string): Promise~boolean~
+        +sweepExpired(): void
+        +destroy(): void
+    }
+
+    %% === US3 Detectors ===
+    class CircularLogicDetector {
+        -nlpProcessor: NLPProcessor
+        +detect(text: string): Promise~Issue[]~
+        -buildSentenceGraph(sentences: string[]): Map~number_number[]~
+        -findCycles(graph: Map~number_number[]~): number[][]
+        -computeNgramOverlap(sentences: string[], n: number): Overlap[]
+    }
+
+    class WeakEvidenceDetector {
+        -citationParser: CitationParser
+        +detect(text: string): Promise~Issue[]~
+        -scoreEvidence(citations: Citation[]): number
+    }
+
+    class UnsupportedClaimsDetector {
+        -aiService: IAIAnalysisService
+        +detect(text: string): Promise~Issue[]~
+        -matchClaimsToEvidence(claims: Claim[], evidence: EvidenceBlock[]): ClaimValidation[]
+    }
+
+    %% === US1 Repositories ===
+    class CommentRepository {
+        -pool: Pool
+        +getById(id: number): Promise~Comment_or_null~
+        +getByPostId(postId: number): Promise~Comment[]~
+    }
+
+    class ReasoningSummaryRepository {
+        -pool: Pool
+        +findByCommentId(commentId: number): Promise~DBRow_or_null~
+        +upsert(summary: ReasoningSummaryInsert): Promise~DBRow~
+        +deleteByCommentId(commentId: number): Promise~void~
+    }
+
+    %% === US3 Repositories ===
+    class DraftRepository {
+        -pool: Pool
+        +save(draft: DraftInsert): Promise~DraftRow~
+        +findByUserId(userId: number): Promise~DraftRow[]~
+        +findById(id: number): Promise~DraftRow_or_null~
+        +deleteById(id: number): Promise~void~
+    }
+
+    class FeedbackLogRepository {
+        -pool: Pool
+        +save(log: FeedbackLogInsert): Promise~FeedbackLogRow~
+        +findByUserId(userId: number, limit: number, offset: number): Promise~FeedbackLogRow[]~
+        +countByUserId(userId: number): Promise~number~
+    }
+
+    %% === Shared Utilities ===
+    class NLPProcessor {
+        +tokenize(text: string): string[]
+        +parseSentences(text: string): string[]
+    }
+
+    class CommentValidator {
+        +validateCommentId(id: any): number
+        +sanitizeText(text: string): string
+    }
+
+    class DraftValidator {
+        +validateDraftText(text: any): string
+        +validateContextId(id: any): number
+    }
+
+    class CitationParser {
+        +extractCitations(text: string): Citation[]
+        +scoreCitation(citation: Citation): number
+    }
+
+    %% === US1 Models/DTOs ===
+    class ReasoningSummaryDTO {
+        +commentId: number
+        +summary: string
+        +primaryClaim: string
+        +evidenceBlocks: EvidenceBlock[]
+        +coherenceScore: number
+        +generatedAt: Date
+    }
+
+    class EvidenceBlock {
+        +type: string
+        +content: string
+        +strength: string
+    }
+
+    class Claim {
+        +id: number
+        +text: string
+        +supportingEvidence: string[]
+    }
+
+    %% === US3 Models/DTOs ===
+    class FeedbackResult {
+        +issues: Issue[]
+        +score: number
+        +suggestions: Suggestion[]
+        +goodPoints: string[]
+        +confidence: number
+        +generatedAt: Date
+    }
+
+    class Issue {
+        +type: string
+        +position: Position
+        +lineNumber: number
+        +flaggedText: string
+        +explanation: string
+        +severity: string
+        +confidence: number
+    }
+
+    class Suggestion {
+        +text: string
+        +type: string
+        +priority: string
+        +exampleFix: string
+        +docLink: string
+    }
+
+    %% === US1 Relationships ===
+    ReasoningSummaryController --> IReasoningSummaryService
+    IReasoningSummaryService <|.. ReasoningSummaryService
+    ReasoningSummaryService --> IAIAnalysisService
+    ReasoningSummaryService --> ICacheService
+    ReasoningSummaryService --> CommentRepository
+    ReasoningSummaryService --> ReasoningSummaryRepository
+    ReasoningSummaryService --> CommentValidator
+    ReasoningSummaryService --> NLPProcessor
+    ReasoningSummaryService ..> ReasoningSummaryDTO : creates
+    ReasoningSummaryDTO --> EvidenceBlock
+    ReasoningSummaryDTO --> Claim
+
+    %% === US3 Relationships ===
+    WritingFeedbackController --> IWritingFeedbackService
+    IWritingFeedbackService <|.. WritingFeedbackService
+    WritingFeedbackService --> IAIAnalysisService
+    WritingFeedbackService --> ICacheService
+    WritingFeedbackService --> CircularLogicDetector
+    WritingFeedbackService --> WeakEvidenceDetector
+    WritingFeedbackService --> UnsupportedClaimsDetector
+    WritingFeedbackService --> FeedbackLogRepository
+    WritingFeedbackSessionManager --> WritingFeedbackService
+    WritingFeedbackController --> DraftRepository
+    WritingFeedbackController --> DraftValidator
+    WritingFeedbackService ..> FeedbackResult : creates
+    FeedbackResult --> Issue
+    FeedbackResult --> Suggestion
+
+    %% === Shared Relationships ===
+    IAIAnalysisService <|.. AIAnalysisService
+    IAIAnalysisService <|.. MockAIAnalysisService
+    ICacheService <|.. InMemoryCacheService
+    CircularLogicDetector --> NLPProcessor
+    WeakEvidenceDetector --> CitationParser
+    UnsupportedClaimsDetector --> IAIAnalysisService
+```
+
+#### 1.9.3 State Diagram
+
+```mermaid
+stateDiagram-v2
+    [*] --> UserAction
+
+    state UserAction {
+        [*] --> ChooseAction
+        ChooseAction --> US1_Flow : Click "Show AI Summary"
+        ChooseAction --> US3_Flow : Start typing in composer
+    }
+
+    state US1_Flow {
+        [*] --> US1_Validating
+        US1_Validating --> US1_Rejected : Invalid commentId or auth failure
+        US1_Validating --> US1_CheckingCache : Valid request
+        US1_Rejected --> [*] : Return 400/401/429
+        US1_CheckingCache --> US1_Returning : Cache HIT
+        US1_CheckingCache --> US1_CheckingDB : Cache MISS
+        US1_CheckingDB --> US1_CachingFromDB : DB row exists & not expired
+        US1_CheckingDB --> US1_FetchingComment : No DB row or expired
+        US1_CachingFromDB --> US1_Returning : Cache set, return DTO
+        US1_FetchingComment --> US1_NotFound : Comment ID not in DB
+        US1_FetchingComment --> US1_Analyzing : Comment found
+        US1_NotFound --> [*] : Return 404
+        US1_Analyzing --> US1_ExtractClaims : extractClaims()
+        US1_ExtractClaims --> US1_ExtractEvidence : extractEvidence()
+        US1_ExtractEvidence --> US1_EvalCoherence : evaluateCoherence()
+        US1_EvalCoherence --> US1_GenSummary : generateSummary()
+        US1_GenSummary --> US1_Persisting : Build DTO
+        US1_GenSummary --> US1_Error : AI service throws
+        US1_Error --> [*] : Return 500
+        US1_Persisting --> US1_Caching : Upsert reasoning_summaries
+        US1_Caching --> US1_Returning : set(key, dto, 86400)
+        US1_Returning --> [*] : Return 200 JSON
+    }
+
+    state US3_Flow {
+        [*] --> Typing
+        Typing --> DebouncePending : Keystroke detected
+        DebouncePending --> DebouncePending : Additional keystroke (reset timer)
+        DebouncePending --> SubmittingDraft : 500ms debounce expires
+        SubmittingDraft --> CheckingSession : draft:analyze / POST
+        CheckingSession --> AnalysisRejected : analysisInFlight=true
+        CheckingSession --> US3_CheckingCache : analysisInFlight=false
+        AnalysisRejected --> Typing : Drop, wait for next debounce
+        US3_CheckingCache --> DeliveringFeedback : Cache HIT
+        US3_CheckingCache --> RunningDetectors : Cache MISS
+        RunningDetectors --> ExtractingClaims : extractClaims()
+        ExtractingClaims --> ParallelDetection : claims & evidence ready
+
+        state ParallelDetection {
+            [*] --> CircularLogic
+            [*] --> WeakEvidence
+            [*] --> UnsupportedClaims
+            CircularLogic --> [*]
+            WeakEvidence --> [*]
+            UnsupportedClaims --> [*]
+        }
+
+        ParallelDetection --> Aggregating : Promise.all resolves
+        Aggregating --> PersistingLog : Build FeedbackResult
+        PersistingLog --> US3_Caching : FeedbackLogRepository.save()
+        US3_Caching --> DeliveringFeedback : set(hash, result, 3600)
+        DeliveringFeedback --> Rendering : feedback:result / HTTP 200
+        Rendering --> Typing : Continue editing
+        Rendering --> SavingDraft : Click Save Draft
+        SavingDraft --> DraftSaved : DraftRepository.save()
+        DraftSaved --> Typing : Continue editing
+        Typing --> SubmittingComment : Click Submit
+        SubmittingComment --> [*] : Comment created, session cleanup
+        RunningDetectors --> US3_Error : AI/detector throws
+        US3_Error --> Typing : feedback:error
+    }
+```
+
+#### 1.9.4 Flow Chart
+
+```mermaid
+flowchart TD
+    START([User Action]) --> CHOICE{Which feature?}
+
+    CHOICE -- Show AI Summary --> US1_A
+    CHOICE -- Type in Composer --> US3_A
+
+    %% === US1 Flow ===
+    US1_A([Click 'Show AI Summary']) --> US1_B["GET /api/v1/comments/:commentId/reasoning-summary<br/>Authorization: Bearer JWT"]
+    US1_B --> US1_C{authMiddleware:<br/>JWT valid?}
+    US1_C -- No --> US1_C1[Return 401 Unauthorized]
+    US1_C -- Yes --> US1_D{rateLimiter:<br/>under 100 req/min?}
+    US1_D -- No --> US1_D1[Return 429 Too Many Requests]
+    US1_D -- Yes --> US1_E["CommentValidator.validateCommentId(commentId)"]
+    US1_E --> US1_F{Valid positive<br/>integer?}
+    US1_F -- No --> US1_F1[Return 400 Bad Request]
+    US1_F -- Yes --> US1_G["InMemoryCacheService.get('reasoning_summary:' + commentId)"]
+    US1_G --> US1_H{Cache HIT?}
+    US1_H -- Yes --> US1_R[Return 200 JSON — cached ReasoningSummaryDTO]
+    US1_H -- No --> US1_I["ReasoningSummaryRepository.findByCommentId(commentId)"]
+    US1_I --> US1_J{DB row exists<br/>and not expired?}
+    US1_J -- Yes --> US1_K["InMemoryCacheService.set(key, dto, 86400)"] --> US1_R
+    US1_J -- No --> US1_L["CommentRepository.getById(commentId)"]
+    US1_L --> US1_M{Comment found?}
+    US1_M -- No --> US1_M1[Return 404 Not Found]
+    US1_M -- Yes --> US1_N["IAIAnalysisService.extractClaims(comment.text)"]
+    US1_N --> US1_O["IAIAnalysisService.extractEvidence(comment.text)"]
+    US1_O --> US1_P["IAIAnalysisService.evaluateCoherence(claims, evidence)"]
+    US1_P --> US1_Q["IAIAnalysisService.generateSummary({claims, evidence, coherence})"]
+    US1_Q --> US1_S{AI service error?}
+    US1_S -- Yes --> US1_S1[Return 500 Internal Server Error]
+    US1_S -- No --> US1_T["Build ReasoningSummaryDTO"]
+    US1_T --> US1_U["ReasoningSummaryRepository.upsert(dto)"]
+    US1_U --> US1_V["InMemoryCacheService.set(key, dto, 86400)"]
+    US1_V --> US1_R
+    US1_R --> US1_W([Client renders ReasoningSummaryPanel])
+
+    %% === US3 Flow ===
+    US3_A([User types in ComposerWithFeedback]) --> US3_B["Debounce timer starts (500ms)"]
+    US3_B --> US3_B2{Additional keystroke<br/>within 500ms?}
+    US3_B2 -- Yes --> US3_B3["Reset debounce timer"] --> US3_B
+    US3_B2 -- No --> US3_C["emit draft:analyze via Socket.IO<br/>Fallback: POST /api/v1/composer/draft-feedback"]
+    US3_C --> US3_D{authMiddleware:<br/>JWT valid?}
+    US3_D -- No --> US3_D1[Return 401 / emit feedback:error]
+    US3_D -- Yes --> US3_E{rateLimiter:<br/>under 100 req/min?}
+    US3_E -- No --> US3_E1[Return 429 / emit feedback:error]
+    US3_E -- Yes --> US3_F["DraftValidator.validateDraftText(draftText)"]
+    US3_F --> US3_G{Valid text<br/>≤ 10,000 chars?}
+    US3_G -- No --> US3_G1[Return 400 Bad Request]
+    US3_G -- Yes --> US3_H["SessionManager.isAnalysisInFlight(userId)"]
+    US3_H --> US3_I{Analysis<br/>in flight?}
+    US3_I -- Yes --> US3_I1[Drop request]
+    US3_I -- No --> US3_J["markAnalysisInFlight(userId)"]
+    US3_J --> US3_K["hashDraftText(draftText) → sha256"]
+    US3_K --> US3_L["InMemoryCacheService.get('draft_feedback:' + sha256)"]
+    US3_L --> US3_M{Cache HIT?}
+    US3_M -- Yes --> US3_R["Return FeedbackResult"]
+    US3_M -- No --> US3_N["IAIAnalysisService.extractClaims(text)"]
+    US3_N --> US3_N2["IAIAnalysisService.extractEvidence(text)"]
+    US3_N2 --> US3_O["Promise.all: Run 3 detectors in parallel"]
+    US3_O --> US3_O1["CircularLogicDetector.detect()"]
+    US3_O --> US3_O2["WeakEvidenceDetector.detect()"]
+    US3_O --> US3_O3["UnsupportedClaimsDetector.detect()"]
+    US3_O1 & US3_O2 & US3_O3 --> US3_P["Aggregate issues, compute score"]
+    US3_P --> US3_Q["Build FeedbackResult DTO"]
+    US3_Q --> US3_Q1{AI error?}
+    US3_Q1 -- Yes --> US3_Q2["Return 500 / emit feedback:error"]
+    US3_Q1 -- No --> US3_Q3["FeedbackLogRepository.save(log)"]
+    US3_Q3 --> US3_Q4["InMemoryCacheService.set(key, result, 3600)"]
+    US3_Q4 --> US3_R
+    US3_R --> US3_S["emit feedback:result / Return 200 JSON"]
+    US3_S --> US3_T([Client renders inline feedback])
+```
+
+#### 1.9.5 Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant RSP as ReasoningSummaryPanel.jsx
+    participant CWF as ComposerWithFeedback.jsx
+    participant Auth as authMiddleware
+    participant RL as rateLimiter
+    participant RSCtrl as ReasoningSummaryController
+    participant RSSvc as ReasoningSummaryService
+    participant SIO as Socket.IO /composer
+    participant SM as WritingFeedbackSessionManager
+    participant WFSvc as WritingFeedbackService
+    participant Cache as InMemoryCacheService
+    participant CLD as CircularLogicDetector
+    participant WED as WeakEvidenceDetector
+    participant UCD as UnsupportedClaimsDetector
+    participant AI as IAIAnalysisService
+    participant DB as PostgreSQL
+
+    rect rgb(230, 240, 255)
+        Note over User,DB: US1 — Inline AI Reasoning Summary
+        User->>RSP: Click "Show AI Summary"
+        RSP->>Auth: GET /api/v1/comments/3/reasoning-summary (Bearer JWT)
+        Auth->>Auth: Verify JWT
+        Auth->>RL: Pass userId
+        RL->>RL: Check rate limit
+        alt Rate limit exceeded
+            RL-->>RSP: 429
+        end
+        RL->>RSCtrl: req.user = { id: userId }
+        RSCtrl->>RSCtrl: validateCommentId(3)
+        RSCtrl->>RSSvc: getSummary(3)
+        RSSvc->>Cache: get("reasoning_summary:3")
+        alt Cache HIT
+            Cache-->>RSSvc: ReasoningSummaryDTO
+            RSSvc-->>RSCtrl: DTO
+            RSCtrl-->>RSP: 200 JSON
+        else Cache MISS
+            RSSvc->>DB: SELECT FROM reasoning_summaries WHERE comment_id=3
+            alt DB row exists
+                DB-->>RSSvc: Row
+                RSSvc->>Cache: set("reasoning_summary:3", dto, 86400)
+                RSSvc-->>RSCtrl: DTO
+                RSCtrl-->>RSP: 200 JSON
+            else No DB row
+                RSSvc->>DB: SELECT FROM comments WHERE id=3
+                alt Comment not found
+                    RSSvc-->>RSCtrl: throw 404
+                    RSCtrl-->>RSP: 404
+                else Comment found
+                    DB-->>RSSvc: Comment
+                    RSSvc->>AI: extractClaims(text)
+                    AI-->>RSSvc: Claim[]
+                    RSSvc->>AI: extractEvidence(text)
+                    AI-->>RSSvc: EvidenceBlock[]
+                    RSSvc->>AI: evaluateCoherence(claims, evidence)
+                    AI-->>RSSvc: score
+                    RSSvc->>AI: generateSummary(analysis)
+                    AI-->>RSSvc: summary
+                    RSSvc->>DB: UPSERT reasoning_summaries
+                    RSSvc->>Cache: set("reasoning_summary:3", dto, 86400)
+                    RSSvc-->>RSCtrl: DTO
+                    RSCtrl-->>RSP: 200 JSON
+                end
+            end
+        end
+        RSP->>User: Render summary panel
+    end
+
+    rect rgb(255, 240, 230)
+        Note over User,DB: US3 — Real-Time Writing Feedback
+        User->>CWF: Start typing
+        Note over CWF: 500ms debounce
+        CWF->>SIO: connect(/composer, { auth: { token: JWT } })
+        SIO->>Auth: Verify JWT
+        Auth-->>SIO: userId = 42
+        SIO->>SM: registerSession(42, socketId)
+        User->>CWF: Stop typing (debounce expires)
+        CWF->>SIO: emit('draft:analyze', { draftText, contextId })
+        SIO->>SM: isAnalysisInFlight(42)?
+        SM-->>SIO: false
+        SIO->>SM: markAnalysisInFlight(42)
+        SIO->>WFSvc: analyzeDraft(draftText)
+        WFSvc->>Cache: get("draft_feedback:<sha256>")
+        alt Cache HIT
+            Cache-->>WFSvc: FeedbackResult
+            WFSvc-->>SIO: FeedbackResult
+            SIO->>SM: updateFeedback(42, result)
+            SIO-->>CWF: emit('feedback:result', result)
+        else Cache MISS
+            WFSvc->>AI: extractClaims(draftText)
+            AI-->>WFSvc: Claim[]
+            WFSvc->>AI: extractEvidence(draftText)
+            AI-->>WFSvc: EvidenceBlock[]
+            par Parallel Detection
+                WFSvc->>CLD: detect(draftText)
+                CLD-->>WFSvc: Issue[]
+            and
+                WFSvc->>WED: detect(draftText)
+                WED-->>WFSvc: Issue[]
+            and
+                WFSvc->>UCD: detect(draftText)
+                UCD-->>WFSvc: Issue[]
+            end
+            WFSvc->>WFSvc: aggregateFeedback(allIssues)
+            WFSvc->>DB: FeedbackLogRepository.save(log)
+            WFSvc->>Cache: set("draft_feedback:<sha256>", result, 3600)
+            WFSvc-->>SIO: FeedbackResult
+            SIO->>SM: updateFeedback(42, result)
+            SIO-->>CWF: emit('feedback:result', result)
+        end
+        CWF->>User: Render inline feedback
+    end
+```
+
 ---
 
 ## 2. Database Schemas
