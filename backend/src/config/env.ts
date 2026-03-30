@@ -11,7 +11,13 @@ export const env = {
   DB_USER: process.env.DB_USER || 'postgres',
   DB_PASSWORD: process.env.DB_PASSWORD || 'postgres',
 
-  JWT_SECRET: process.env.JWT_SECRET || 'dev-secret-change-in-production',
+  JWT_SECRET: (() => {
+    const secret = process.env.JWT_SECRET;
+    if (!secret && process.env.NODE_ENV === 'production') {
+      throw new Error('JWT_SECRET must be set in production');
+    }
+    return secret || 'dev-secret-change-in-production';
+  })(),
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
 
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
