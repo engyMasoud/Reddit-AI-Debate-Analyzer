@@ -7,6 +7,14 @@
 import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
+
+jest.mock('../../../frontend/src/context/RedditContext', () => {
+  const ReactLocal = require('react');
+  return {
+    RedditContext: ReactLocal.createContext(),
+  };
+});
+
 import ComposerWithFeedback from '../../../frontend/src/components/ComposerWithFeedback';
 import { RedditContext } from '../../../frontend/src/context/RedditContext';
 
@@ -924,4 +932,102 @@ describe('ComposerWithFeedback', () => {
     const marks = backdrop.querySelectorAll('mark');
     expect(marks).toHaveLength(2);
   });
+
+  // ── T-49 [NEW]: Suggestions-only feedback should still render success panel ──
+  test('T-49 [NEW] renders Suggestions section when feedback contains suggestions but no issues/goodPoints', () => {
+    const feedback = createMockFeedback({
+      score: 0.62,
+      issues: [],
+      goodPoints: [],
+      suggestions: [
+        createMockSuggestion({ id: 100, text: 'Clarify your claim with a concrete example' }),
+      ],
+    });
+
+    renderWithContext({ draftFeedback: feedback });
+
+    // A completed analysis with suggestions should not fall back to the empty state.
+    expect(screen.queryByText('Start typing to receive feedback')).not.toBeInTheDocument();
+    expect(screen.getByText('Suggestions')).toBeInTheDocument();
+    expect(screen.getByText('Clarify your claim with a concrete example')).toBeInTheDocument();
+  });
+
+  // ── T-50 [NEW]: Debounced analysis is cancelled on unmount ──
+  test('T-50 [NEW] does not call analyzeDraft after unmount when debounce is pending', () => {
+    const { ctx, unmount } = renderWithContext();
+
+    const textarea = screen.getByRole('textbox', { name: /write your reply/i });
+    fireEvent.change(textarea, { target: { value: 'A long draft that should have been debounced' } });
+
+    // Unmount before the 500ms debounce completes.
+    unmount();
+
+    act(() => {
+      jest.advanceTimersByTime(600);
+    });
+
+    expect(ctx.analyzeDraft).not.toHaveBeenCalled();
+  });
+
+  // ── T-51 [NEW]: Highlighted segments are HTML-escaped inside mark tags ──
+  test('T-51 [NEW] escapes HTML characters inside highlighted text ranges', () => {
+    const feedback = createMockFeedback({
+      score: 0.5,
+      issues: [
+        createMockIssue({
+          id: 1,
+          type: 'unsupported_claim',
+          position: { start: 0, end: 12 },
+        }),
+      ],
+    });
+
+    const { container } = renderWithContext({ draftFeedback: feedback });
+
+    const textarea = screen.getByRole('textbox', { name: /write your reply/i });
+    fireEvent.change(textarea, { target: { value: '<script>a&b</script> evidence' } });
+
+    const backdrop = container.querySelector('[aria-hidden="true"]');
+    expect(backdrop.innerHTML).toContain('<mark');
+    expect(backdrop.innerHTML).toContain('&lt;script&gt;a&amp;b&lt;');
+    expect(backdrop.innerHTML).toContain('/script&gt;');
+    expect(backdrop.innerHTML).not.toContain('<script>');
+  });
+
+  // ── T-52 [NEW]: Defensive handling when feedback arrays are null ──
+  test('T-52 [NEW] does not crash when feedback payload contains null arrays', () => {
+    const malformedFeedback = {
+      score: 0.5,
+      issues: null,
+      goodPoints: null,
+      suggestions: null,
+      confidence: 0.9,
+      generatedAt: new Date(),
+    };
+
+    expect(() => {
+      renderWithContext({ draftFeedback: malformedFeedback });
+    }).not.toThrow();
+  });
+
+  // ── T-53 [NEW]: Clamp score UI to max 100 for out-of-range backend values ──
+  test('T-53 [NEW] caps score display at 100 when backend score exceeds 1.0', () => {
+    const feedback = createMockFeedback({
+      score: 1.25,
+      issues: [createMockIssue({ id: 1 })],
+    });
+
+    renderWithContext({ draftFeedback: feedback });
+
+    // UI should clamp to 100/100 even if backend returns an invalid score > 1.
+    expect(screen.getByText('100')).toBeInTheDocument();
+    expect(screen.queryByText('125')).not.toBeInTheDocument();
+  });
 });
+
+// NEW TESTS ADDED IN THIS UPDATE:
+// - T-49 [NEW] renders Suggestions section when feedback contains suggestions but no issues/goodPoints
+// - T-50 [NEW] does not call analyzeDraft after unmount when debounce is pending
+// - T-51 [NEW] escapes HTML characters inside highlighted text ranges
+// - T-52 [NEW] does not crash when feedback payload contains null arrays
+// - T-53 [NEW] caps score display at 100 when backend score exceeds 1.0
