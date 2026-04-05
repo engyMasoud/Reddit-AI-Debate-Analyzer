@@ -17,13 +17,13 @@ A full-stack application with a React frontend and a Node.js/Express/TypeScript 
 
 The backend test suite uses the following (all installed automatically via `npm install`):
 
-| Package | Purpose |
-|---|---|
-| **Jest** (v30) | Test runner and assertion library |
-| **ts-jest** | Runs Jest on TypeScript files without a separate compile step |
-| **TypeScript** (v5) | Language the backend is written in |
-| **@types/jest** | TypeScript type definitions for Jest |
-| **@stryker-mutator/core** | Mutation testing (optional, for `test:mutate` script) |
+| Package                   | Purpose                                                       |
+| ------------------------- | ------------------------------------------------------------- |
+| **Jest** (v30)            | Test runner and assertion library                             |
+| **ts-jest**               | Runs Jest on TypeScript files without a separate compile step |
+| **TypeScript** (v5)       | Language the backend is written in                            |
+| **@types/jest**           | TypeScript type definitions for Jest                          |
+| **@stryker-mutator/core** | Mutation testing (optional, for `test:mutate` script)         |
 
 ### Steps
 
@@ -68,16 +68,16 @@ The backend test suite uses the following (all installed automatically via `npm 
 
 The frontend test suite uses the following (all installed automatically via `npm install`):
 
-| Package | Purpose |
-|---|---|
-| **Jest** (v29) | Test runner and assertion library |
-| **jest-environment-jsdom** | Simulates a browser DOM for component tests |
-| **@testing-library/react** | Utilities for rendering and querying React components |
-| **@testing-library/jest-dom** | Custom Jest matchers for DOM assertions (e.g., `toBeInTheDocument()`) |
-| **@testing-library/user-event** | Simulates realistic user interactions (clicks, typing, etc.) |
-| **Babel** (`@babel/core`, `@babel/preset-env`, `@babel/preset-react`) | Transpiles JSX and modern JavaScript for Jest |
-| **babel-jest** | Integrates Babel with Jest's transform pipeline |
-| **identity-obj-proxy** | Mocks CSS module imports so they don't break tests |
+| Package                                                               | Purpose                                                               |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| **Jest** (v29)                                                        | Test runner and assertion library                                     |
+| **jest-environment-jsdom**                                            | Simulates a browser DOM for component tests                           |
+| **@testing-library/react**                                            | Utilities for rendering and querying React components                 |
+| **@testing-library/jest-dom**                                         | Custom Jest matchers for DOM assertions (e.g., `toBeInTheDocument()`) |
+| **@testing-library/user-event**                                       | Simulates realistic user interactions (clicks, typing, etc.)          |
+| **Babel** (`@babel/core`, `@babel/preset-env`, `@babel/preset-react`) | Transpiles JSX and modern JavaScript for Jest                         |
+| **babel-jest**                                                        | Integrates Babel with Jest's transform pipeline                       |
+| **identity-obj-proxy**                                                | Mocks CSS module imports so they don't break tests                    |
 
 ### Steps
 
