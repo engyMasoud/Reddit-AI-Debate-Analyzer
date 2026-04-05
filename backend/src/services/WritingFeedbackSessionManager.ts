@@ -77,7 +77,9 @@ export class WritingFeedbackSessionManager {
 
   isAnalysisInFlight(userId: number): boolean {
     const entry = this.sessions.get(userId);
-    return entry?.analysisInFlight ?? false;
+    if (!entry) return false;
+    if (Date.now() - entry.lastActivityAt >= this.sessionTimeoutMs) return false;
+    return entry.analysisInFlight;
   }
 
   getSession(userId: number): SessionEntry | null {
@@ -118,6 +120,7 @@ export class WritingFeedbackSessionManager {
     const entry = this.sessions.get(userId);
     if (entry) {
       entry.analysisInFlight = false;
+      entry.lastActivityAt = Date.now();
     }
   }
 

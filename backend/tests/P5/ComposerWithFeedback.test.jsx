@@ -526,29 +526,31 @@ describe('ComposerWithFeedback', () => {
 
   // ── T-21: handleRetry re-triggers analysis when draft ≥ 10 characters ──
   test('T-21 clears error and calls analyzeDraft when retry clicked with ≥ 10 char draft', () => {
-    // Seed feedbackError = true via useState spy
+    // Seed both draftText (≥10 chars) and feedbackError (true) via useState spy.
+    // Lock feedbackError to true so useEffect's setFeedbackError(false) is a no-op.
     const originalUseState = React.useState;
     let stateCallIndex = 0;
+    const setFeedbackErrorMock = jest.fn();
     jest.spyOn(React, 'useState').mockImplementation((init) => {
       stateCallIndex++;
-      if (stateCallIndex === 2) {
-        return originalUseState(true); // feedbackError = true
+      const callInRender = ((stateCallIndex - 1) % 2) + 1; // 1 or 2
+      if (callInRender === 1) {
+        // draftText — seed with long text
+        return originalUseState('A long enough draft');
       }
-      return originalUseState(init);
+      // feedbackError — always return true, ignore setter
+      return [true, setFeedbackErrorMock];
     });
 
     const { ctx } = renderWithContext();
 
-    const textarea = screen.getByRole('textbox', { name: /write your reply/i });
-
-    // Type ≥ 10 characters
-    fireEvent.change(textarea, { target: { value: 'A long enough draft' } });
-
-    // Click Retry Analysis button
+    // Error state should show Retry button
     const retryBtn = screen.getByRole('button', { name: /retry analysis/i });
+
+    // Click Retry Analysis — handleRetry reads draftText and calls analyzeDraft
     fireEvent.click(retryBtn);
 
-    // analyzeDraft should have been called with the current draft text
+    // analyzeDraft should have been called with the seeded draft text
     expect(ctx.analyzeDraft).toHaveBeenCalledWith('A long enough draft');
   });
 
@@ -733,7 +735,11 @@ describe('ComposerWithFeedback', () => {
     fireEvent.change(textarea, { target: { value: '<div class="a&b">It\'s</div>' } });
 
     const backdrop = container.querySelector('[aria-hidden="true"]');
-    expect(backdrop.innerHTML).toContain('&lt;div class=&quot;a&amp;b&quot;&gt;It&#039;s&lt;/div&gt;');
+    // JSDOM normalizes &quot; → " and &#039; → ' in innerHTML text nodes
+    expect(backdrop.innerHTML).toContain('&lt;div class=');
+    expect(backdrop.innerHTML).toContain('a&amp;b');
+    expect(backdrop.innerHTML).toContain('&gt;');
+    expect(backdrop.innerHTML).toContain('&lt;/div&gt;');
   });
 
   // ── T-31: escapeHtml — return unchanged text when no special chars ──

@@ -143,7 +143,7 @@ export class WritingFeedbackService implements IWritingFeedbackService {
     }
 
     // Check for specific technical terms
-    if (/\b[A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+)*\b/.test(text)) {
+    if (/\b[A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+)+\b/.test(text)) {
       goodPoints.push('Mentions specific technical concepts');
     }
 
