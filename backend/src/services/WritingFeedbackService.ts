@@ -34,7 +34,7 @@ export class WritingFeedbackService implements IWritingFeedbackService {
     const cached = await this.cache.get<FeedbackResult>(cacheKey);
     if (cached) return cached;
 
-    // Run three detectors in parallel
+    // Run three detectors in parallel!!
     const [circularIssues, weakIssues, unsupportedIssues] = await Promise.all([
       this.circularLogicDetector.detect(text),
       this.weakEvidenceDetector.detect(text),
