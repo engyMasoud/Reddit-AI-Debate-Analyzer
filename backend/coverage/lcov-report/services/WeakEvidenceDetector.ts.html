@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">11.11% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>1/9</span>
+                <span class='fraction'>9/9</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/4</span>
+                <span class='fraction'>4/4</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/2</span>
+                <span class='fraction'>2/2</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">11.11% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>1/9</span>
+                <span class='fraction'>9/9</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line high'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -123,14 +123,12 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">21x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">21x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -151,10 +149,12 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">105x</span>
+<span class="cline-any cline-yes">105x</span>
+<span class="cline-any cline-yes">12x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -166,11 +166,11 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">21x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">12x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { Issue } from '../models/Issue';
@@ -179,11 +179,11 @@
  * Identifies weak evidence via citation extraction and evidence strength scoring.
  */
 export class WeakEvidenceDetector {
-<span class="fstat-no" title="function not covered" >  async </span>detect(text: string): Promise&lt;Issue[]&gt; {
-    const issues: Issue[] = <span class="cstat-no" title="statement not covered" >[];</span>
+  async detect(text: string): Promise&lt;Issue[]&gt; {
+    const issues: Issue[] = [];
 &nbsp;
     // Detect appeal-to-popularity patterns
-    const weakPatterns: Array&lt;{ pattern: RegExp; explanation: string }&gt; = <span class="cstat-no" title="statement not covered" >[</span>
+    const weakPatterns: Array&lt;{ pattern: RegExp; explanation: string }&gt; = [
       {
         pattern: /everyone (knows|agrees|says|thinks|believes)/i,
         explanation: "Appeal to popularity — 'everyone' is not evidence of quality. Cite specific data or surveys.",
@@ -206,10 +206,10 @@ export class WeakEvidenceDetector {
       },
     ];
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    for (const { pattern, explanation } of weakPatterns) {</span>
-      const match = <span class="cstat-no" title="statement not covered" >pattern.exec(text);</span>
-<span class="cstat-no" title="statement not covered" >      if (match &amp;&amp; match.index !== undefined) {</span>
-<span class="cstat-no" title="statement not covered" >        issues.push({</span>
+    for (const { pattern, explanation } of weakPatterns) {
+      const match = pattern.exec(text);
+      if (match &amp;&amp; match.index !== undefined) {
+        issues.push({
           type: 'weak_evidence',
           position: { start: match.index, end: match.index + match[0].length },
           lineNumber: this.getLineNumber(text, match.index),
@@ -221,11 +221,11 @@ export class WeakEvidenceDetector {
       }
     }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    return issues;</span>
+    return issues;
   }
 &nbsp;
-  private <span class="fstat-no" title="function not covered" >getLineNumber(</span>text: string, position: number): number {
-<span class="cstat-no" title="statement not covered" >    return text.substring(0, position).split('\n').length;</span>
+  private getLineNumber(text: string, position: number): number {
+    return text.substring(0, position).split('\n').length;
   }
 }
 &nbsp;</pre></td></tr></table></pre>
@@ -235,7 +235,7 @@ export class WeakEvidenceDetector {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-04-05T14:57:28.488Z
+                at 2026-04-06T03:44:56.688Z
             </div>
         <script src="../prettify.js"></script>
         <script>

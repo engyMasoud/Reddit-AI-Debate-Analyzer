@@ -1,6 +1,9 @@
 import { io } from 'socket.io-client';
 
-const API_BASE = '/api/v1';
+// In production (Amplify), VITE_API_URL should be the full API Gateway URL, e.g.
+// https://abc123.execute-api.us-east-1.amazonaws.com/prod/api/v1
+// In local dev, leave it unset to use the Vite proxy at '/api/v1'.
+const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 
 // ── Token management ──
 let authToken = null;
