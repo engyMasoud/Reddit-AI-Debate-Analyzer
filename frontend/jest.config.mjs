@@ -1,7 +1,7 @@
 export default {
   testEnvironment: 'jsdom',
-  roots: ['<rootDir>/../backend/tests/P5'],
-  testMatch: ['**/*.test.jsx'],
+  roots: ['<rootDir>/../backend/tests/P5', '<rootDir>/src'],
+  testMatch: ['**/*.test.jsx', '**/*.test.js'],
   moduleFileExtensions: ['js', 'jsx', 'json'],
   watchman: false,
   haste: {

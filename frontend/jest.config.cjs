@@ -1,1 +1,0 @@
-(file removed: use jest.config.mjs instead)

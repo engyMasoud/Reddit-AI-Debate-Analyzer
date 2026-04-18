@@ -2,9 +2,9 @@ name: Frontend Tests
 
 on:
   push:
-    branches: [develop]
+    branches: [develop, main]
   pull_request:
-    branches: [develop]
+    branches: [develop, main]
 
 jobs:
   frontend-tests:
@@ -25,8 +25,8 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Run tests
+      - name: Run unit tests
         working-directory: frontend
         env:
-          VITE_API_URL: https://50g0tuzmrc.execute-api.us-east-2.amazonaws.com/prod/api
-        run: npm test -- --config jest.config.mjs --verbose
+          VITE_API_URL: ${{ secrets.API_GATEWAY_URL }}
+        run: npm test -- --config jest.config.mjs --verbose --testPathIgnorePatterns=integration
