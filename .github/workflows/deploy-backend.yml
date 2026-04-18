@@ -22,13 +22,17 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
-      - name: Install dependencies
+      - name: Install all dependencies
         working-directory: backend
-        run: npm ci --omit=dev
+        run: npm ci
 
       - name: Build TypeScript
         working-directory: backend
         run: npx tsc
+
+      - name: Prune dev dependencies
+        working-directory: backend
+        run: npm prune --omit=dev
 
       - name: Package Lambda zip
         working-directory: backend
