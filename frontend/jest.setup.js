@@ -1,0 +1,1 @@
+globalThis.import = { meta: { env: { VITE_API_URL: 'https://50g0tuzmrc.execute-api.us-east-2.amazonaws.com/prod/api' } } };
