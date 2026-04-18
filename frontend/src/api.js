@@ -1,16 +1,19 @@
 
 
-// Polyfill import.meta.env for Jest/Node environments (safe for Babel)
-if (typeof process !== 'undefined' && process.env && !('import' in globalThis)) {
-  globalThis.import = { meta: { env: { VITE_API_URL: process.env.VITE_API_URL || '' } } };
-}
 
 import { io } from 'socket.io-client';
 
-// In production (Amplify), VITE_API_URL should be the full API Gateway URL, e.g.
-// https://abc123.execute-api.us-east-1.amazonaws.com/prod/api/v1
-// In local dev, leave it unset to use the Vite proxy at '/api/v1'.
-const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
+// Robust API base URL selection for all environments (Vite, Node, Jest)
+let API_BASE = '';
+if (typeof process !== 'undefined' && process.env && process.env.VITE_API_URL) {
+  // Node/Jest/test environment
+  API_BASE = process.env.VITE_API_URL;
+} else if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
+  // Vite/browser environment
+  API_BASE = import.meta.env.VITE_API_URL;
+} else {
+  API_BASE = '/api/v1';
+}
 
 // ── Token management ──
 let authToken = null;
