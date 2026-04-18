@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "jest --coverage --config jest.config.mjs"
+    "test": "jest --coverage"
   },
   "dependencies": {
     "@react-oauth/google": "^0.13.4",
