@@ -1,6 +1,7 @@
 
-// Polyfill import.meta.env for Jest/Node environments
-if (typeof import === 'undefined' || !import.meta || !import.meta.env) {
+
+// Polyfill import.meta.env for Jest/Node environments (safe for Babel)
+if (typeof process !== 'undefined' && process.env && !('import' in globalThis)) {
   globalThis.import = { meta: { env: { VITE_API_URL: process.env.VITE_API_URL || '' } } };
 }
 
