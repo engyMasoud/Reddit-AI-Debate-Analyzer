@@ -27,4 +27,4 @@ jobs:
 
       - name: Run tests
         working-directory: frontend
-        run: npm test -- --config jest.config.cjs --verbose
+        run: npm test -- --config jest.config.mjs --verbose
