@@ -4,30 +4,27 @@
 import { io } from 'socket.io-client';
 
 // Robust API base URL selection for all environments (Vite, Node, Jest)
-let API_BASE = '';
-if (typeof process !== 'undefined' && process.env && process.env.VITE_API_URL) {
+function resolveApiBase() {
   // Node/Jest/test environment
-  API_BASE = process.env.VITE_API_URL;
-} else if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
-  // Vite/browser environment
-  API_BASE = import.meta.env.VITE_API_URL;
-} else {
-  API_BASE = '/api/v1';
+  if (typeof process !== 'undefined' && process.env && process.env.VITE_API_URL) {
+    return process.env.VITE_API_URL;
+  }
+  // Browser (Vite) environment
+  if (typeof window !== 'undefined') {
+    // Only access import.meta.env in the browser, inside a function
+    const getViteApiUrl = () => {
+      // This function is only called in the browser, so import.meta is safe
+      return typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL
+        ? import.meta.env.VITE_API_URL
+        : undefined;
+    };
+    return getViteApiUrl() || '/api/v1';
+  }
+  // Fallback
+  return '/api/v1';
 }
-if (typeof process !== 'undefined' && process.env && process.env.VITE_API_URL) {
-  API_BASE = process.env.VITE_API_URL;
-} else if (typeof window !== 'undefined') {
-  // Only access import.meta.env in the browser, inside a function
-  const getViteApiUrl = () => {
-    // This function is only called in the browser, so import.meta is safe
-    return typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL
-      ? import.meta.env.VITE_API_URL
-      : undefined;
-  };
-  API_BASE = getViteApiUrl() || '/api/v1';
-} else {
-  API_BASE = '/api/v1';
-}
+
+const API_BASE = resolveApiBase();
 
 // ── Token management ──
 let authToken = null;
