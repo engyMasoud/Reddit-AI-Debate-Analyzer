@@ -1,3 +1,9 @@
+
+// Polyfill import.meta.env for Jest/Node environments
+if (typeof import === 'undefined' || !import.meta || !import.meta.env) {
+  globalThis.import = { meta: { env: { VITE_API_URL: process.env.VITE_API_URL || '' } } };
+}
+
 import { io } from 'socket.io-client';
 
 // In production (Amplify), VITE_API_URL should be the full API Gateway URL, e.g.
