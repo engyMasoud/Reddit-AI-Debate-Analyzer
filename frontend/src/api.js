@@ -14,6 +14,20 @@ if (typeof process !== 'undefined' && process.env && process.env.VITE_API_URL) {
 } else {
   API_BASE = '/api/v1';
 }
+if (typeof process !== 'undefined' && process.env && process.env.VITE_API_URL) {
+  API_BASE = process.env.VITE_API_URL;
+} else if (typeof window !== 'undefined') {
+  // Only access import.meta.env in the browser, inside a function
+  const getViteApiUrl = () => {
+    // This function is only called in the browser, so import.meta is safe
+    return typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL
+      ? import.meta.env.VITE_API_URL
+      : undefined;
+  };
+  API_BASE = getViteApiUrl() || '/api/v1';
+} else {
+  API_BASE = '/api/v1';
+}
 
 // ── Token management ──
 let authToken = null;
