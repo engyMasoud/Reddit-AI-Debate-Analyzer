@@ -7,19 +7,20 @@
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
+    "build:lambda": "tsc && node -e \"console.log('Lambda build ready in dist/')\"",
     "db:init": "psql -U postgres -f schema.sql",
     "test": "jest --verbose --coverage",
     "test:mutate": "npx stryker run"
-  
   },
   "dependencies": {
-    "bcrypt": "^5.1.1",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.18.2",
     "google-auth-library": "^10.6.2",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.12.0",
+    "serverless-http": "^3.2.0",
     "socket.io": "^4.7.5",
     "zod": "^3.23.8"
   },
@@ -27,7 +28,9 @@
     "@stryker-mutator/core": "^9.6.0",
     "@stryker-mutator/jest-runner": "^9.6.0",
     "@stryker-mutator/typescript-checker": "^9.6.0",
+    "@types/aws-lambda": "^8.10.145",
     "@types/bcrypt": "^5.0.2",
+    "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/jest": "^30.0.0",

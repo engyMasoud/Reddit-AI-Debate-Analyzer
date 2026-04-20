@@ -1,6 +1,26 @@
+
+
+
 import { io } from 'socket.io-client';
 
-const API_BASE = '/api/v1';
+// Robust API base URL selection for all environments (Vite, Node, Jest)
+let API_BASE = '/api/v1';
+if (typeof process !== 'undefined' && process.env && process.env.VITE_API_URL) {
+  API_BASE = process.env.VITE_API_URL;
+} else if (typeof window !== 'undefined') {
+  // Dynamically import viteEnv.js only in the browser
+  try {
+    // This will only run in the browser, never in Node/Jest
+    import('./viteEnv.js').then(mod => {
+      const viteUrl = mod.getViteApiUrl();
+      if (viteUrl) {
+        API_BASE = viteUrl;
+      }
+    });
+  } catch (e) {
+    // Ignore if import fails
+  }
+}
 
 // ── Token management ──
 let authToken = null;

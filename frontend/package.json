@@ -7,11 +7,13 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --experimental-vm-modules node_modules/.bin/jest --coverage"
+    "test": "jest --coverage"
   },
   "dependencies": {
     "@react-oauth/google": "^0.13.4",
     "lucide-react": "^0.263.1",
+    "node-fetch": "^2.7.0",
+    "pg": "^8.20.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "socket.io-client": "^4.8.3"

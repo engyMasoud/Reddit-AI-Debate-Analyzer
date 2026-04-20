@@ -68,7 +68,7 @@ export default function ComposerWithFeedback({ postId, onSubmit, onCancel }) {
     }
   };
 
-  // Build highlighted HTML for the backdrop overlay!
+  // Build highlighted HTML for the backdrop overlay!!
   // (Placeholder: highlight overlay is injected here for issue underlines)
   const buildHighlightedMarkup = () => {
     if (!draftFeedback || !draftFeedback.issues.length) {

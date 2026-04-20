@@ -1,7 +1,7 @@
-module.exports = {
+export default {
   testEnvironment: 'jsdom',
-  roots: ['<rootDir>/../backend/tests/P5'],
-  testMatch: ['**/*.test.jsx'],
+  roots: ['<rootDir>/../backend/tests/P5', '<rootDir>/src'],
+  testMatch: ['**/*.test.jsx', '**/*.test.js'],
   moduleFileExtensions: ['js', 'jsx', 'json'],
   watchman: false,
   haste: {
@@ -9,7 +9,7 @@ module.exports = {
     enableSymlinks: true,
   },
   transform: {
-    '^.+\\.jsx?$': ['babel-jest', { configFile: './babel.config.cjs' }],
+    '^.+\\.[tj]sx?$': ['babel-jest', { configFile: './babel.config.cjs' }],
   },
   transformIgnorePatterns: [
     'node_modules/(?!(socket\\.io-client|engine\\.io-client|socket\\.io-parser|lucide-react)/)',
@@ -18,6 +18,6 @@ module.exports = {
     '\\.(css|less|scss)$': 'identity-obj-proxy',
   },
   modulePaths: ['<rootDir>/node_modules'],
-  // Force Jest to treat .js/.jsx as CJS despite "type": "module" in package.json
+  setupFiles: ['<rootDir>/jest.setup.js'],
   resolver: '<rootDir>/jest-resolver.cjs',
 };
