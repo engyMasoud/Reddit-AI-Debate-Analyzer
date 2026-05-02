@@ -2,6 +2,7 @@ import { IAIAnalysisService } from './interfaces/IAIAnalysisService';
 import { Claim } from '../models/Claim';
 import { EvidenceBlock } from '../models/EvidenceBlock';
 import { AnalysisResult } from '../models/AnalysisResult';
+import { FeedbackResult } from '../models/FeedbackResult';
 
 /**
  * Deterministic mock — returns fixtures based on text length.
@@ -36,5 +37,10 @@ export class MockAIAnalysisService implements IAIAnalysisService {
   async generateSummary(analysis: AnalysisResult): Promise<string> {
     const claimText = analysis.claims[0]?.text ?? 'No claims found';
     return `Mock summary: Argues "${claimText}" with ${analysis.evidence.length} piece(s) of evidence.`;
+  }
+
+  /** Mock scoreDraft — returns null so WritingFeedbackService uses regex pipeline. */
+  async scoreDraft(_text: string, _context?: string): Promise<FeedbackResult | null> {
+    return null;
   }
 }

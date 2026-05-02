@@ -42,6 +42,15 @@ export class WritingFeedbackService implements IWritingFeedbackService {
 
       console.log(`[WritingFeedback] Starting analysis for draft (${text.length} chars)`);
 
+      // ── Try real AI scoring first ──
+      const aiResult = await this.aiService.scoreDraft(text, context);
+      if (aiResult) {
+        console.log(`[WritingFeedback] AI score: ${aiResult.score} (${aiResult.issues.length} issues)`);
+        await this.cache.set(cacheKey, aiResult as unknown as object, env.CACHE_FEEDBACK_TTL);
+        return aiResult;
+      }
+
+      // ── Fallback: regex detector pipeline ──
       // Run three detectors in parallel
       const [circularIssues, weakIssues, unsupportedIssues] = await Promise.all([
         this.circularLogicDetector.detect(text),

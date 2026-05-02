@@ -3,6 +3,7 @@ import { IAIAnalysisService } from './interfaces/IAIAnalysisService';
 import { Claim } from '../models/Claim';
 import { EvidenceBlock } from '../models/EvidenceBlock';
 import { AnalysisResult } from '../models/AnalysisResult';
+import { FeedbackResult } from '../models/FeedbackResult';
 
 /**
  * Production AI Analysis Service using OpenAI GPT-4.
@@ -222,5 +223,104 @@ Coherence Score: ${analysis.coherenceScore}`,
       response.choices[0]?.message?.content ||
       'Unable to generate summary at this time.'
     );
+  }
+
+  async scoreDraft(text: string, context?: string): Promise<FeedbackResult | null> {
+    const contextSection = context
+      ? `\n\nPost context (what the debate is about):\n"""${context.substring(0, 400)}"""`
+      : '';
+
+    try {
+      const response = await this.client.chat.completions.create({
+        model: this.model,
+        messages: [
+          {
+            role: 'system',
+            content: `You are an expert debate coach evaluating argument quality. Analyze the provided comment and return ONLY a valid JSON object with this exact structure:
+{
+  "score": <integer 0-100>,
+  "issues": [
+    {
+      "type": "circular_logic|weak_evidence|unsupported_claim|logical_fallacy|off_topic",
+      "flaggedText": "<short excerpt from the comment, max 80 chars>",
+      "explanation": "<one sentence explaining the problem>",
+      "severity": "low|medium|high",
+      "confidence": <float 0-1>
+    }
+  ],
+  "suggestions": [
+    {
+      "text": "<concrete improvement suggestion>",
+      "type": "structure|reference|clarity|tone",
+      "priority": "low|medium|high",
+      "exampleFix": "<brief example of improved phrasing>"
+    }
+  ],
+  "goodPoints": ["<specific strength of this argument>"]
+}
+
+Scoring guide:
+- 90-100: Well-reasoned, evidence-backed, clear position
+- 70-89: Good argument with minor gaps
+- 50-69: Decent but lacks evidence or has logical gaps
+- 30-49: Opinion-only or significant logical problems
+- 0-29: Irrelevant, offensive, or no real argument
+
+Return ONLY the JSON object. No markdown, no explanation.`,
+          },
+          {
+            role: 'user',
+            content: `Evaluate this debate comment:${contextSection}\n\nComment:\n"""${text}"""`,
+          },
+        ],
+        temperature: 0.2,
+        max_tokens: 800,
+      });
+
+      const raw = response.choices[0]?.message?.content?.trim() || '';
+      // Strip markdown code fences if present
+      const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+      const parsed = JSON.parse(clean);
+
+      const score = Math.min(100, Math.max(0, Number(parsed.score) || 0)) / 100;
+
+      const issues = Array.isArray(parsed.issues)
+        ? parsed.issues.map((iss: any) => ({
+            type: (['circular_logic', 'weak_evidence', 'unsupported_claim', 'logical_fallacy', 'off_topic'] as const)
+              .includes(iss.type) ? iss.type : 'unsupported_claim',
+            position: { start: 0, end: 0 },
+            lineNumber: 1,
+            flaggedText: String(iss.flaggedText || '').substring(0, 80),
+            explanation: String(iss.explanation || ''),
+            severity: (['low', 'medium', 'high'] as const).includes(iss.severity) ? iss.severity : 'medium',
+            confidence: Math.min(1, Math.max(0, Number(iss.confidence) || 0.7)),
+          }))
+        : [];
+
+      const suggestions = Array.isArray(parsed.suggestions)
+        ? parsed.suggestions.map((s: any) => ({
+            text: String(s.text || ''),
+            type: (['structure', 'reference', 'clarity', 'tone'] as const).includes(s.type) ? s.type : 'clarity',
+            priority: (['low', 'medium', 'high'] as const).includes(s.priority) ? s.priority : 'medium',
+            exampleFix: String(s.exampleFix || ''),
+          }))
+        : [];
+
+      const goodPoints: string[] = Array.isArray(parsed.goodPoints)
+        ? parsed.goodPoints.map((p: any) => String(p))
+        : (score >= 0.5 ? ['Argument submitted for review'] : []);
+
+      return {
+        score,
+        issues,
+        suggestions,
+        goodPoints,
+        confidence: 0.9,
+        generatedAt: new Date(),
+      };
+    } catch (err) {
+      console.error('[AIAnalysisService] scoreDraft error:', err);
+      return null; // Caller falls back to regex pipeline
+    }
   }
 }
