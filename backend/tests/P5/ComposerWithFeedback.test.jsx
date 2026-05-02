@@ -302,7 +302,7 @@ describe('ComposerWithFeedback', () => {
 
     // Now analyzeDraft should have been called with the draft text
     expect(ctx.analyzeDraft).toHaveBeenCalledTimes(1);
-    expect(ctx.analyzeDraft).toHaveBeenCalledWith('A long enough draft text for testing');
+    expect(ctx.analyzeDraft).toHaveBeenCalledWith('A long enough draft text for testing', 1);
   });
 
   // ── T-10: Clear feedback when draft shrinks below 10 characters ──
@@ -350,7 +350,7 @@ describe('ComposerWithFeedback', () => {
 
     // analyzeDraft should have been called only once with the FINAL text
     expect(ctx.analyzeDraft).toHaveBeenCalledTimes(1);
-    expect(ctx.analyzeDraft).toHaveBeenCalledWith('Second draft replacing the first one');
+    expect(ctx.analyzeDraft).toHaveBeenCalledWith('Second draft replacing the first one', 1);
   });
 
   // ── T-12: Clears the timeout on cleanup (dependency change) ──
@@ -387,7 +387,7 @@ describe('ComposerWithFeedback', () => {
     });
 
     expect(ctx.analyzeDraft).toHaveBeenCalledTimes(1);
-    expect(ctx.analyzeDraft).toHaveBeenCalledWith('A brand new second draft text');
+    expect(ctx.analyzeDraft).toHaveBeenCalledWith('A brand new second draft text', 1);
   });
 
   // ── T-13: Reset draftFeedback on unmount ──
@@ -905,7 +905,7 @@ describe('ComposerWithFeedback', () => {
     });
 
     // analyzeDraft should have been called
-    expect(ctx.analyzeDraft).toHaveBeenCalledWith(draftText);
+    expect(ctx.analyzeDraft).toHaveBeenCalledWith(draftText, 1);
 
     // Step 4: Re-render with feedback to simulate context update
     const updatedCtx = buildContext({ draftFeedback: feedbackResult });

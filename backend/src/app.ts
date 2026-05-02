@@ -7,6 +7,7 @@ import { errorHandler } from './middleware/errorHandler';
 // Route imports
 import { authRoutes } from './routes/auth.routes';
 import { postRoutes } from './routes/posts.routes';
+import { pollRoutes } from './routes/polls.routes';
 import { commentRoutes } from './routes/comments.routes';
 import { subredditRoutes } from './routes/subreddits.routes';
 import { userRoutes } from './routes/users.routes';
@@ -16,6 +17,8 @@ import { composerRoutes } from './routes/composer.routes';
 // Service imports
 import { InMemoryCacheService } from './services/InMemoryCacheService';
 import { MockAIAnalysisService } from './services/MockAIAnalysisService';
+import { AIAnalysisService } from './services/AIAnalysisService';
+import { IAIAnalysisService } from './services/interfaces/IAIAnalysisService';
 
 // Repository imports
 import { CommentRepository } from './repositories/CommentRepository';
@@ -53,7 +56,17 @@ app.use(express.json({ limit: '10mb' }));
 
 // ── Shared services ──
 const cacheService = new InMemoryCacheService();
-const aiService = new MockAIAnalysisService();
+
+// Use real OpenAI service if API key is provided, otherwise use mock
+const aiService: IAIAnalysisService = env.OPENAI_API_KEY
+  ? new AIAnalysisService(env.OPENAI_API_KEY, env.OPENAI_MODEL)
+  : new MockAIAnalysisService();
+
+if (env.OPENAI_API_KEY) {
+  console.log(`✨ Using real OpenAI API (${env.OPENAI_MODEL}) for AI analysis`);
+} else {
+  console.log('🎭 Using mock AI service (no OPENAI_API_KEY set)');
+}
 
 // ── Repositories ──
 const commentRepo = new CommentRepository(pool);
@@ -62,11 +75,11 @@ const draftRepo = new DraftRepository(pool);
 const feedbackLogRepo = new FeedbackLogRepository(pool);
 
 // ── Services ──
-const reasoningSummaryService = new ReasoningSummaryService(
-  aiService, cacheService, commentRepo, summaryRepo
-);
 const writingFeedbackService = new WritingFeedbackService(
   aiService, cacheService, feedbackLogRepo
+);
+const reasoningSummaryService = new ReasoningSummaryService(
+  aiService, cacheService, commentRepo, summaryRepo, pool, writingFeedbackService
 );
 
 // ── Controllers ──
@@ -77,7 +90,8 @@ const writingFeedbackController = new WritingFeedbackController(
 
 // ── Routes ──
 app.use('/api/v1/auth', authRoutes(pool));
-app.use('/api/v1/posts', postRoutes(pool));
+app.use('/api/v1/posts', postRoutes(pool, reasoningSummaryService));
+app.use('/api/v1/polls', pollRoutes(pool));
 app.use('/api/v1/comments', commentRoutes(pool, reasoningSummaryController));
 app.use('/api/v1/subreddits', subredditRoutes(pool));
 app.use('/api/v1/users', userRoutes(pool));

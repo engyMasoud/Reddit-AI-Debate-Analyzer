@@ -3,7 +3,10 @@ import { ArrowLeft, ChevronUp, ChevronDown, MessageCircle, Share2, X, Flag } fro
 import { RedditContext } from '../context/RedditContext';
 import ReasoningSummaryPanel from './ReasoningSummaryPanel';
 import ComposerWithFeedback from './ComposerWithFeedback';
-import { reportComment as apiReportComment } from '../api';
+import EmojiReactions from './EmojiReactions';
+import DebateSides from './DebateSides';
+import PollDisplay from './PollDisplay';
+import { reportComment as apiReportComment, fetchPoll as apiFetchPoll } from '../api';
 
 export default function PostDetail() {
   const { selectedPost, setSelectedPost, handleVote, handleCommentVote, userVotes, getPostComments, addComment, posts } = useContext(RedditContext);
@@ -11,6 +14,7 @@ export default function PostDetail() {
   const [replyingTo, setReplyingTo] = useState(null);
   const [replyText, setReplyText] = useState('');
   const [replySubmitting, setReplySubmitting] = useState(false);
+  const [replyError, setReplyError] = useState(null);
   const [shareToast, setShareToast] = useState(null); // 'post' | commentId | null
   const [reportingComment, setReportingComment] = useState(null);
   const [reportReason, setReportReason] = useState('');
@@ -42,6 +46,24 @@ export default function PostDetail() {
     setReplyText('');
     setReportingComment(null);
   }, [selectedPost?.id]);
+
+  // Fetch poll for selected post
+  useEffect(() => {
+    if (selectedPost && !selectedPost.poll) {
+      console.log('Fetching poll for post:', selectedPost.id);
+      apiFetchPoll(selectedPost.id)
+        .then(poll => {
+          console.log('Poll fetched:', poll);
+          if (poll) {
+            setSelectedPost(prev => ({
+              ...prev,
+              poll
+            }));
+          }
+        })
+        .catch(err => console.warn('Failed to fetch poll:', err));
+    }
+  }, [selectedPost?.id, selectedPost?.poll, setSelectedPost]);
 
   // ── Build comment tree (must be before early return to satisfy rules of hooks) ──
   const post = selectedPost ? (posts.find((p) => p.id === selectedPost.id) || selectedPost) : null;
@@ -105,12 +127,20 @@ export default function PostDetail() {
   const handleReplySubmit = async (parentId) => {
     if (!replyText.trim() || replySubmitting) return;
     setReplySubmitting(true);
+    setReplyError(null);
     try {
-      await addComment(post.id, replyText.trim(), parentId);
+      const result = await addComment(post.id, replyText.trim(), parentId);
+      if (!result.success) {
+        setReplyError(result.error || 'Failed to post comment. Please try again.');
+        setReplySubmitting(false);
+        return;
+      }
       setReplyText('');
       setReplyingTo(null);
+      setReplyError(null);
     } catch (err) {
       console.error('Reply failed:', err);
+      setReplyError('Failed to post comment. Please try again.');
     } finally {
       setReplySubmitting(false);
     }
@@ -146,22 +176,27 @@ export default function PostDetail() {
     const indentLevel = Math.min(depth, maxIndent);
 
     return (
-      <div key={comment.id} id={`comment-${comment.id}`} style={{ marginLeft: indentLevel * 24 }} className={depth > 0 ? 'border-l-2 border-gray-100 pl-4' : ''}>
-        <div className="py-4 border-b border-gray-50 last:border-b-0">
+      <div key={comment.id} id={`comment-${comment.id}`} style={{ marginLeft: indentLevel * 24 }} className={depth > 0 ? 'border-l-2 border-gray-100 dark:border-gray-700 pl-4' : ''}>
+        <div className="py-4 border-b border-gray-50 dark:border-gray-700 last:border-b-0">
           {/* Comment Header */}
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+            <div className="w-6 h-6 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0">
               {comment.author.charAt(0).toUpperCase()}
             </div>
-            <span className="text-xs font-medium text-gray-600">{comment.author}</span>
-            <span className="text-xs text-gray-300">·</span>
-            <span className="text-xs text-gray-400">{formatDate(comment.timestamp)}</span>
+            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">{comment.author}</span>
+            <span className="text-xs text-gray-300 dark:text-gray-600">·</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">{formatDate(comment.timestamp)}</span>
           </div>
 
           {/* Comment Body */}
-          <p className="text-sm text-gray-700 leading-relaxed mb-2 pl-8">
+          <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-2 pl-8">
             {comment.text}
           </p>
+
+          {/* Emoji Reactions */}
+          <div className="pl-8 mb-2">
+            <EmojiReactions targetType="comment" targetId={comment.id} reactions={comment.emojiReactions || []} />
+          </div>
 
           {/* Comment Action Bar */}
           <div className="flex items-center gap-3 text-xs pl-8 mb-1">
@@ -224,6 +259,12 @@ export default function PostDetail() {
                 rows={3}
                 autoFocus
               />
+              {replyError && (
+                <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700 flex items-center gap-2">
+                  <span>⚠️</span>
+                  <span>{replyError}</span>
+                </div>
+              )}
               <div className="flex gap-2 mt-1">
                 <button
                   onClick={() => handleReplySubmit(comment.id)}
@@ -233,8 +274,8 @@ export default function PostDetail() {
                   {replySubmitting ? 'Posting...' : 'Reply'}
                 </button>
                 <button
-                  onClick={() => { setReplyingTo(null); setReplyText(''); }}
-                  className="px-3 py-1 text-gray-500 text-xs font-semibold rounded-lg hover:bg-gray-100 transition"
+                  onClick={() => { setReplyingTo(null); setReplyText(''); setReplyError(null); }}
+                  className="px-3 py-1 text-gray-500 dark:text-gray-400 text-xs font-semibold rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
                 >
                   Cancel
                 </button>
@@ -244,14 +285,14 @@ export default function PostDetail() {
 
           {/* Report Dropdown */}
           {reportingComment === comment.id && (
-            <div className="pl-8 mt-2 p-3 bg-red-50 border border-red-100 rounded-lg">
-              <p className="text-xs font-semibold text-red-700 mb-2">Report this comment:</p>
+            <div className="pl-8 mt-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-lg">
+              <p className="text-xs font-semibold text-red-700 dark:text-red-400 mb-2">Report this comment:</p>
               <div className="flex flex-wrap gap-1.5 mb-2">
                 {REPORT_REASONS.map((r) => (
                   <button
                     key={r}
                     onClick={() => setReportReason(r)}
-                    className={`px-2.5 py-1 text-xs rounded-full border transition ${reportReason === r ? 'bg-red-600 text-white border-red-600' : 'bg-white text-red-700 border-red-200 hover:bg-red-100'}`}
+                    className={`px-2.5 py-1 text-xs rounded-full border transition ${reportReason === r ? 'bg-red-600 text-white border-red-600' : 'bg-white dark:bg-gray-800 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800/50 hover:bg-red-100 dark:hover:bg-gray-700'}`}
                   >
                     {r}
                   </button>
@@ -316,11 +357,11 @@ export default function PostDetail() {
         aria-label={`Thread: ${post.title}`}
       >
         <div
-          className="bg-white w-full max-w-3xl min-h-screen sm:min-h-0 sm:my-8 sm:rounded-xl sm:shadow-xl"
+          className="bg-white dark:bg-gray-800 w-full max-w-3xl min-h-screen sm:min-h-0 sm:my-8 sm:rounded-xl sm:shadow-xl dark:shadow-2xl dark:shadow-black/50"
           onClick={(e) => e.stopPropagation()}
         >
           {/* ── Header Bar ── */}
-          <div className="sticky top-0 bg-white border-b border-gray-200 px-4 sm:px-6 py-3 flex items-center gap-3 z-10 sm:rounded-t-xl">
+          <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-3 flex items-center gap-3 z-10 sm:rounded-t-xl">
             <button
               onClick={handleClose}
               className="p-1.5 hover:bg-gray-100 rounded-lg transition"
@@ -334,7 +375,7 @@ export default function PostDetail() {
             </div>
             <button
               onClick={handleClose}
-              className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600 transition"
+              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition"
               aria-label="Close"
             >
               <X size={18} aria-hidden="true" />
@@ -344,19 +385,19 @@ export default function PostDetail() {
           {/* ── Thread Content ── */}
           <div className="px-4 sm:px-6 py-6 sm:max-h-[85vh] sm:overflow-y-auto">
             {/* Author & Meta */}
-            <div className="flex items-center gap-2 text-xs text-gray-400 mb-3">
-              <div className="w-6 h-6 bg-violet-100 text-violet-600 rounded-full flex items-center justify-center text-[10px] font-bold">
+            <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500 mb-3">
+              <div className="w-6 h-6 bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 rounded-full flex items-center justify-center text-[10px] font-bold">
                 {post.author.charAt(0).toUpperCase()}
               </div>
-              <span className="font-medium text-gray-600">{post.author}</span>
+              <span className="font-medium text-gray-600 dark:text-gray-400">{post.author}</span>
               <span>·</span>
               <span>{formatDate(post.timestamp)}</span>
               <span>·</span>
-              <span className="px-1.5 py-0.5 bg-violet-50 text-violet-600 rounded text-[10px] font-medium">{post.subreddit}</span>
+              <span className="px-1.5 py-0.5 bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 rounded text-[10px] font-medium">{post.subreddit}</span>
             </div>
 
             {/* Title */}
-            <h1 className="text-xl font-bold text-gray-900 leading-snug mb-4">
+            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-snug mb-4">
               {post.title}
             </h1>
 
@@ -371,13 +412,24 @@ export default function PostDetail() {
 
             {/* Text Content */}
             {post.content && (
-              <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap mb-5">
+              <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed whitespace-pre-wrap mb-5">
                 {post.content}
               </p>
             )}
 
+            {/* Poll */}
+            {post.poll && (
+              <PollDisplay postId={post.id} poll={post.poll} />
+            )}
+
+            {/* Emoji Reactions & Debate Sides */}
+            <div className="flex flex-col gap-4 mb-6">
+              <EmojiReactions targetType="post" targetId={post.id} reactions={post.emojiReactions || []} />
+              <DebateSides postId={post.id} forCount={post.forCount || 0} againstCount={post.againstCount || 0} />
+            </div>
+
             {/* Inline Stats & Actions */}
-            <div className="flex items-center gap-4 py-3 border-y border-gray-100 mb-6 text-xs text-gray-400">
+            <div className="flex items-center gap-4 py-3 border-y border-gray-100 dark:border-gray-700 mb-6 text-xs text-gray-400 dark:text-gray-500">
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => handleVote(post.id, 'up')}
@@ -405,7 +457,7 @@ export default function PostDetail() {
               </div>
               <button
                 onClick={() => handleShare('post', post.id)}
-                className="flex items-center gap-1 hover:text-gray-600 transition"
+                className="flex items-center gap-1 hover:text-gray-600 dark:hover:text-gray-400 transition"
               >
                 <Share2 size={13} />
                 <span>{shareToast === 'post' ? 'Link copied!' : 'Share'}</span>
@@ -414,8 +466,8 @@ export default function PostDetail() {
 
             {/* ── Comments Section ── */}
             <section aria-label="Comments">
-              <h3 className="text-base font-bold text-gray-900 mb-4">
-                Comments <span className="text-gray-300 font-normal">({post.commentCount})</span>
+              <h3 className="text-base font-bold text-gray-900 dark:text-gray-100 mb-4">
+                Comments <span className="text-gray-300 dark:text-gray-600 font-normal">({post.commentCount})</span>
               </h3>
 
               {/* DS3-US3: Comment Composer with Real-Time Writing Feedback */}

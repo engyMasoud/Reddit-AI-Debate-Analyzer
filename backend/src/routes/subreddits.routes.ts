@@ -9,7 +9,7 @@ export function subredditRoutes(pool: Pool): Router {
   router.get('/', async (_req: Request, res: Response) => {
     try {
       const { rows } = await pool.query(
-        'SELECT * FROM subreddits ORDER BY id ASC'
+        'SELECT * FROM subreddits WHERE name != \'Home\' ORDER BY id ASC'
       );
       res.json(rows.map((r: any) => ({
         id: r.id,

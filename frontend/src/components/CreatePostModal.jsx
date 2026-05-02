@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect, useRef } from 'react';
-import { X, Upload, Link, Trash2 } from 'lucide-react';
+import { X, Upload, Link, Trash2, Plus, Minus } from 'lucide-react';
 import { RedditContext } from '../context/RedditContext';
 
 export default function CreatePostModal({ isOpen, onClose }) {
@@ -12,6 +12,9 @@ export default function CreatePostModal({ isOpen, onClose }) {
   const [error, setError] = useState('');
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [urlInput, setUrlInput] = useState('');
+  const [includePoll, setIncludePoll] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState(['', '']);
   const fileInputRef = useRef(null);
 
   const handleFileUpload = (e) => {
@@ -41,6 +44,9 @@ export default function CreatePostModal({ isOpen, onClose }) {
       setError('');
       setShowUrlInput(false);
       setUrlInput('');
+      setIncludePoll(false);
+      setPollQuestion('');
+      setPollOptions(['', '']);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   }, [isOpen]);
@@ -64,9 +70,22 @@ export default function CreatePostModal({ isOpen, onClose }) {
     if (!content.trim()) { setError('Content is required'); return; }
     if (!subreddit) { setError('Please select a community'); return; }
 
+    // Validate poll if included
+    if (includePoll) {
+      if (!pollQuestion.trim()) { setError('Poll question is required'); return; }
+      const validOptions = pollOptions.filter(opt => opt.trim());
+      if (validOptions.length < 2) { setError('Poll must have at least 2 options'); return; }
+      if (validOptions.length > 10) { setError('Poll can have at most 10 options'); return; }
+    }
+
     setSubmitting(true);
     try {
-      await createPost(title.trim(), content.trim(), subreddit, image.trim() || undefined);
+      const pollData = includePoll ? {
+        question: pollQuestion.trim(),
+        options: pollOptions.filter(opt => opt.trim())
+      } : undefined;
+
+      await createPost(title.trim(), content.trim(), subreddit, image.trim() || undefined, pollData);
       onClose();
     } catch (err) {
       setError('Failed to create post. Please try again.');
@@ -218,7 +237,83 @@ export default function CreatePostModal({ isOpen, onClose }) {
               )}
             </div>
 
-            {/* Actions */}
+            {/* Poll Section */}
+            <div className="border-t pt-4 mt-4">
+              <label className="flex items-center gap-2 cursor-pointer mb-3">
+                <input
+                  type="checkbox"
+                  checked={includePoll}
+                  onChange={(e) => setIncludePoll(e.target.checked)}
+                  className="w-4 h-4 rounded cursor-pointer"
+                />
+                <span className="text-sm font-medium text-gray-700">Include a poll</span>
+              </label>
+
+              {includePoll && (
+                <div className="space-y-3 pl-6 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                  {/* Poll Question */}
+                  <div>
+                    <label htmlFor="poll-question" className="block text-sm font-medium text-gray-700 mb-1">
+                      Poll Question
+                    </label>
+                    <input
+                      id="poll-question"
+                      type="text"
+                      value={pollQuestion}
+                      onChange={(e) => setPollQuestion(e.target.value)}
+                      placeholder="Ask something interesting..."
+                      maxLength={255}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Poll Options */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Options <span className="text-gray-400 font-normal">({pollOptions.filter(o => o.trim()).length} - min 2, max 10)</span>
+                    </label>
+                    <div className="space-y-2">
+                      {pollOptions.map((option, idx) => (
+                        <div key={idx} className="flex gap-2">
+                          <input
+                            type="text"
+                            value={option}
+                            onChange={(e) => {
+                              const newOptions = [...pollOptions];
+                              newOptions[idx] = e.target.value;
+                              setPollOptions(newOptions);
+                            }}
+                            placeholder={`Option ${idx + 1}`}
+                            maxLength={100}
+                            className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:outline-none"
+                          />
+                          {pollOptions.length > 2 && (
+                            <button
+                              type="button"
+                              onClick={() => setPollOptions(pollOptions.filter((_, i) => i !== idx))}
+                              className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                              title="Remove option"
+                            >
+                              <Minus size={16} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      {pollOptions.length < 10 && (
+                        <button
+                          type="button"
+                          onClick={() => setPollOptions([...pollOptions, ''])}
+                          className="flex items-center gap-2 text-violet-600 hover:bg-violet-50 px-3 py-2 rounded-lg transition text-sm font-medium"
+                        >
+                          <Plus size={14} />
+                          Add option
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"

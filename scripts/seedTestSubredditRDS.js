@@ -11,9 +11,9 @@ async function main() {
   });
   await c.connect();
   const res = await c.query(
-    "INSERT INTO subreddits (name, icon, member_count, color) VALUES ('test', '🧪', 0, 'bg-gray-500') ON CONFLICT (name) DO NOTHING"
+    "INSERT INTO subreddits (name, icon, member_count, color) VALUES ('Social', '👥', 2400000, 'bg-amber-500') ON CONFLICT (name) DO NOTHING"
   );
-  console.log('Test subreddit ready! Rows:', res.rowCount);
+  console.log('Social subreddit ready! Rows:', res.rowCount);
   await c.end();
 }
 

@@ -22,8 +22,13 @@ export default function ComposerWithFeedback({ postId, onSubmit, onCancel }) {
 
     if (draftText.trim().length >= 10) {
       setFeedbackError(false);
-      debounceRef.current = setTimeout(() => {
-        analyzeDraft(draftText);
+      debounceRef.current = setTimeout(async () => {
+        try {
+          await analyzeDraft(draftText, postId);
+        } catch (err) {
+          console.error('Failed to analyze draft:', err);
+          setFeedbackError(true);
+        }
       }, 500);
     } else {
       setDraftFeedback(null);
@@ -32,7 +37,7 @@ export default function ComposerWithFeedback({ postId, onSubmit, onCancel }) {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [draftText, analyzeDraft, setDraftFeedback]);
+  }, [draftText, analyzeDraft, setDraftFeedback, postId]);
 
   // Clean up on unmount
   useEffect(() => {

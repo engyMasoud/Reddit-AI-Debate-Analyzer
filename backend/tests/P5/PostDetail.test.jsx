@@ -27,6 +27,8 @@ jest.mock('../../../frontend/src/components/ComposerWithFeedback', () => {
 // ── Mock API module ──────────────────────────────────────────────────────────
 jest.mock('../../../frontend/src/api', () => ({
   reportComment: jest.fn(),
+  fetchEmojiReactions: jest.fn().mockResolvedValue([]),
+  fetchPoll: jest.fn().mockResolvedValue(null),
 }));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -70,8 +72,16 @@ function buildContext(overrides = {}) {
     handleCommentVote: jest.fn(),
     userVotes: {},
     getPostComments: jest.fn().mockReturnValue([]),
-    addComment: jest.fn().mockResolvedValue(),
+    addComment: jest.fn().mockResolvedValue({ success: true }),
     posts: post ? [post] : [],
+    emojiReactions: {},
+    addEmojiReaction: jest.fn(),
+    removeEmojiReaction: jest.fn(),
+    debateSides: {},
+    polls: {},
+    isDarkMode: false,
+    toggleDarkMode: jest.fn(),
+    user: null,
     ...overrides,
   };
 }

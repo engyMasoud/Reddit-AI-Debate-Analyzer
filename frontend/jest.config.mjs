@@ -16,8 +16,10 @@ export default {
   ],
   moduleNameMapper: {
     '\\.(css|less|scss)$': 'identity-obj-proxy',
+    '^.*/viteEnv\\.js$': '<rootDir>/__mocks__/viteEnv.js',
   },
   modulePaths: ['<rootDir>/node_modules'],
   setupFiles: ['<rootDir>/jest.setup.js'],
+  setupFilesAfterEnv: ['<rootDir>/jest.setup-afterenv.js'],
   resolver: '<rootDir>/jest-resolver.cjs',
 };

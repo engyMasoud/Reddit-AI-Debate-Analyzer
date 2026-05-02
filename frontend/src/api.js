@@ -134,6 +134,15 @@ export async function fetchPosts(subreddit, searchQuery, authorId) {
   return res.json();
 }
 
+export async function fetchPost(postId) {
+  let res = await fetch(`${API_BASE}/posts/${postId}`, {
+    headers: authHeaders(),
+  });
+  res = await handleResponse(res);
+  if (!res.ok) throw new Error('Failed to fetch post');
+  return res.json();
+}
+
 export async function voteOnPost(postId, voteType) {
   let res = await fetch(`${API_BASE}/posts/${postId}/vote`, {
     method: 'POST',
@@ -145,11 +154,11 @@ export async function voteOnPost(postId, voteType) {
   return res.json(); // { upvotes, downvotes, userVote }
 }
 
-export async function createPost(title, content, subreddit, image) {
+export async function createPost(title, content, subreddit, image, poll) {
   let res = await fetch(`${API_BASE}/posts`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ title, content, subreddit, image }),
+    body: JSON.stringify({ title, content, subreddit, image, poll }),
   });
   res = await handleResponse(res);
   if (!res.ok) throw new Error('Failed to create post');
@@ -195,6 +204,88 @@ export async function reportComment(commentId, reason) {
     body: JSON.stringify({ reason }),
   });
   if (!res.ok) throw new Error('Failed to report comment');
+  return res.json();
+}
+
+// ── Emoji Reactions ──
+export async function addEmojiReaction(targetType, targetId, emoji) {
+  const res = await fetch(`${API_BASE}/${targetType === 'post' ? 'posts' : 'comments'}/${targetId}/emoji-reaction`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ emoji }),
+  });
+  if (!res.ok) throw new Error('Failed to add emoji reaction');
+  return res.json();
+}
+
+export async function removeEmojiReaction(targetType, targetId, emoji) {
+  const res = await fetch(`${API_BASE}/${targetType === 'post' ? 'posts' : 'comments'}/${targetId}/emoji-reaction/${encodeURIComponent(emoji)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error('Failed to remove emoji reaction');
+  return res.json();
+}
+
+export async function fetchEmojiReactions(targetType, targetId) {
+  const res = await fetch(`${API_BASE}/${targetType === 'post' ? 'posts' : 'comments'}/${targetId}/emoji-reactions`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error('Failed to fetch emoji reactions');
+  return res.json();
+}
+
+// ── Debate Sides ──
+export async function setDebateSide(postId, side) {
+  const res = await fetch(`${API_BASE}/posts/${postId}/debate-side`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ side }),
+  });
+  if (!res.ok) throw new Error('Failed to set debate side');
+  return res.json();
+}
+
+export async function removeDebateSide(postId) {
+  const res = await fetch(`${API_BASE}/posts/${postId}/debate-side`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error('Failed to remove debate side');
+  return res.json();
+}
+
+export async function getDebateSide(postId) {
+  const res = await fetch(`${API_BASE}/posts/${postId}/debate-side`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error('Failed to fetch debate side');
+  return res.json();
+}
+
+export async function getDebateSideCounts(postId) {
+  const res = await fetch(`${API_BASE}/posts/${postId}/debate-sides`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error('Failed to fetch debate side counts');
+  return res.json();
+}
+
+// ── Polls ──
+export async function fetchPoll(postId) {
+  const res = await fetch(`${API_BASE}/polls/${postId}/poll`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error('Failed to fetch poll');
+  return res.json();
+}
+
+export async function votePoll(optionId) {
+  const res = await fetch(`${API_BASE}/polls/${optionId}/vote`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error('Failed to vote on poll');
   return res.json();
 }
 
