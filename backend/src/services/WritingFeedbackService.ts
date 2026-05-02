@@ -66,7 +66,7 @@ export class WritingFeedbackService implements IWritingFeedbackService {
       const lightweightCoherence = this.calculateLightweightCoherence(text);
       console.log(`[WritingFeedback] Coherence score: ${lightweightCoherence}`);
 
-      const result = this.aggregateFeedback(allIssues, text, lightweightCoherence);
+      const result = this.aggregateFeedback(allIssues, text);
       console.log(`[WritingFeedback] Final score: ${result.score}`);
 
       // Cache
@@ -101,8 +101,8 @@ export class WritingFeedbackService implements IWritingFeedbackService {
     return { feedbackId: logRow.id, result };
   }
 
-  private aggregateFeedback(issues: Issue[], text: string, coherenceScore: number = 0.5): FeedbackResult {
-    const score = this.computeScore(issues, text, coherenceScore);
+  private aggregateFeedback(issues: Issue[], text: string): FeedbackResult {
+    const score = this.computeScore(issues, text);
     const suggestions = this.generateSuggestions(issues);
     const goodPoints = this.identifyGoodPoints(issues, text);
 
@@ -113,44 +113,35 @@ export class WritingFeedbackService implements IWritingFeedbackService {
       goodPoints,
       confidence: issues.length > 0
         ? issues.reduce((sum, i) => sum + i.confidence, 0) / issues.length
-        : coherenceScore, // Use coherence as confidence if no issues
+        : 0.5, // Default confidence when no issues detected
       generatedAt: new Date(),
     };
   }
 
-  private computeScore(issues: Issue[], text: string, coherenceScore: number = 0.5): number {
+  private computeScore(issues: Issue[], text?: string): number {
     // If comment is off-topic (irrelevant to context), score is 0
     const offTopicIssue = issues.find((issue) => issue.type === 'off_topic' && issue.confidence > 0.8);
     if (offTopicIssue) {
       return 0.0;
     }
 
-    // Calculate issue-based score
-    let issueBasedScore = 1.0;
+    // Calculate issue-based score using severity penalties
+    let score = 1.0;
+    
     if (issues.length === 0) {
-      // Check for minimum quality even if no specific issues detected
-      const qualityIssues = this.checkMinimumQuality(text);
-      if (qualityIssues.length > 0) {
-        const penalty = qualityIssues.reduce((sum, _) => sum + 0.2, 0);
-        issueBasedScore = Math.max(0, Math.min(1, parseFloat((1 - penalty).toFixed(2))));
-      }
+      // No issues detected = perfect score
+      score = 1.0;
     } else {
       // Apply severity penalties
-      const severityWeights: Record<string, number> = { high: 0.25, medium: 0.15, low: 0.08 };
+      const severityWeights: Record<string, number> = { high: 0.15, medium: 0.1, low: 0.05 };
       let penalty = 0;
       for (const issue of issues) {
-        penalty += severityWeights[issue.severity] || 0.08;
+        penalty += severityWeights[issue.severity] || 0.05;
       }
-      // Multiplier for multiple issues (compound penalty)
-      if (issues.length > 1) {
-        penalty *= 1.1;
-      }
-      issueBasedScore = Math.max(0, Math.min(1, parseFloat((1 - penalty).toFixed(2))));
+      score = Math.max(0, parseFloat((1.0 - penalty).toFixed(2)));
     }
 
-    // Blend coherence score with issue-based score (60% coherence, 40% issues)
-    const blendedScore = (coherenceScore * 0.6 + issueBasedScore * 0.4);
-    return Math.max(0, Math.min(1, parseFloat(blendedScore.toFixed(2))));
+    return Math.max(0, Math.min(1, score));
   }
 
   private checkMinimumQuality(text: string): string[] {
@@ -260,24 +251,24 @@ export class WritingFeedbackService implements IWritingFeedbackService {
   private identifyGoodPoints(issues: Issue[], text: string): string[] {
     const goodPoints: string[] = [];
 
-    // Don't credit anything if text is too short/vague
-    if (text.trim().length < 30) {
-      return goodPoints; // No good points for very short submissions
-    }
-
-    // Check for clear position statement
-    if (/I (think|believe|argue|contend)\b/.test(text)) {
+    // Check for clear position statement (do this first, before length check)
+    if (/\bI\s+(think|believe|argue|contend)\b/i.test(text)) {
       goodPoints.push('Clear assertion of main position');
     }
 
     // Check for any evidence attempt (words, not just pattern matching)
-    if (/according to|study|data|research|survey|report|percent|%|\d{4}/.test(text)) {
+    if (/according\s+to|study|data|research|survey|report|percent|%|\d{4}/.test(text)) {
       goodPoints.push('Attempts to provide evidence');
     }
 
-    // Check for specific technical terms (only if actually present)
-    if (/\b[A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+)+\b/.test(text) && text.length > 100) {
+    // Check for specific technical terms (capitalized multi-word terms like "Machine Learning" or single-word technical terms like "NLP")
+    if (/\b[A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+)+\b|\b[A-Z]{2,}\b/.test(text)) {
       goodPoints.push('Mentions specific technical concepts');
+    }
+
+    // Fallback message if nothing was identified
+    if (goodPoints.length === 0) {
+      goodPoints.push('Draft submitted for analysis');
     }
 
     return goodPoints;
