@@ -50,3 +50,20 @@ jobs:
           aws lambda update-function-code \
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
             --zip-file fileb://backend/lambda-deploy.zip
+
+      - name: Wait for Lambda update to complete
+        run: |
+          aws lambda wait function-updated \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }}
+
+      - name: Configure Lambda timeout and model
+        run: |
+          CURRENT_ENV=$(aws lambda get-function-configuration \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --query 'Environment.Variables' \
+            --output json)
+          NEW_ENV=$(echo "$CURRENT_ENV" | jq '. + {"OPENAI_MODEL": "gpt-4o-mini"}')
+          aws lambda update-function-configuration \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --timeout 60 \
+            --environment "Variables=$NEW_ENV"

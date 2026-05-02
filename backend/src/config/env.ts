@@ -21,7 +21,7 @@ export const env = {
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
 
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
-  OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4',
+  OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o-mini',
 
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
 
