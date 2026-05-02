@@ -236,45 +236,17 @@ Coherence Score: ${analysis.coherenceScore}`,
         messages: [
           {
             role: 'system',
-            content: `You are an expert debate coach evaluating argument quality. Analyze the provided comment and return ONLY a valid JSON object with this exact structure:
-{
-  "score": <integer 0-100>,
-  "issues": [
-    {
-      "type": "circular_logic|weak_evidence|unsupported_claim|logical_fallacy|off_topic",
-      "flaggedText": "<short excerpt from the comment, max 80 chars>",
-      "explanation": "<one sentence explaining the problem>",
-      "severity": "low|medium|high",
-      "confidence": <float 0-1>
-    }
-  ],
-  "suggestions": [
-    {
-      "text": "<concrete improvement suggestion>",
-      "type": "structure|reference|clarity|tone",
-      "priority": "low|medium|high",
-      "exampleFix": "<brief example of improved phrasing>"
-    }
-  ],
-  "goodPoints": ["<specific strength of this argument>"]
-}
-
-Scoring guide:
-- 90-100: Well-reasoned, evidence-backed, clear position
-- 70-89: Good argument with minor gaps
-- 50-69: Decent but lacks evidence or has logical gaps
-- 30-49: Opinion-only or significant logical problems
-- 0-29: Irrelevant, offensive, or no real argument
-
-Return ONLY the JSON object. No markdown, no explanation.`,
+            content: `Debate coach. Score a comment 0-100 and return ONLY JSON:
+{"score":<0-100>,"issues":[{"type":"circular_logic|weak_evidence|unsupported_claim|logical_fallacy|off_topic","flaggedText":"<excerpt max 60 chars>","explanation":"<1 sentence>","severity":"low|medium|high","confidence":<0-1>}],"suggestions":[{"text":"<suggestion>","type":"structure|reference|clarity|tone","priority":"low|medium|high","exampleFix":"<example>"}],"goodPoints":["<strength>"]}
+Scoring: 90-100=well-reasoned+evidence, 70-89=good minor gaps, 50-69=lacks evidence, 30-49=opinion only, 0-29=irrelevant/offensive. No markdown.`,
           },
           {
             role: 'user',
-            content: `Evaluate this debate comment:${contextSection}\n\nComment:\n"""${text}"""`,
+            content: `Context: ${context ? context.substring(0, 200) : 'general debate'}\nComment: "${text.substring(0, 500)}"`,
           },
         ],
         temperature: 0.2,
-        max_tokens: 800,
+        max_tokens: 400,
       });
 
       const raw = response.choices[0]?.message?.content?.trim() || '';
