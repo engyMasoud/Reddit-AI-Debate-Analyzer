@@ -72,7 +72,7 @@ function buildContext(overrides = {}) {
     handleCommentVote: jest.fn(),
     userVotes: {},
     getPostComments: jest.fn().mockReturnValue([]),
-    addComment: jest.fn().mockResolvedValue(),
+    addComment: jest.fn().mockResolvedValue({ success: true }),
     posts: post ? [post] : [],
     emojiReactions: {},
     addEmojiReaction: jest.fn(),

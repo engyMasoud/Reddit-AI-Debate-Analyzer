@@ -20,5 +20,6 @@ export default {
   },
   modulePaths: ['<rootDir>/node_modules'],
   setupFiles: ['<rootDir>/jest.setup.js'],
+  setupFilesAfterEnv: ['<rootDir>/jest.setup-afterenv.js'],
   resolver: '<rootDir>/jest-resolver.cjs',
 };
