@@ -36,7 +36,7 @@ jobs:
 
       - name: Package Lambda zip
         working-directory: backend
-        run: zip -r lambda-deploy.zip dist/ node_modules/ package.json
+        run: zip -r lambda-deploy.zip dist/ node_modules/ package.json migrations/
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -63,7 +63,8 @@ jobs:
             --query 'Environment.Variables' \
             --output json)
           NEW_ENV=$(echo "$CURRENT_ENV" | jq '. + {"OPENAI_MODEL": "gpt-4o-mini"}')
+          jq -n --arg fn "${{ secrets.LAMBDA_FUNCTION_NAME }}" --argjson env "$NEW_ENV" \
+            '{FunctionName: $fn, Timeout: 60, Environment: {Variables: $env}}' \
+            > /tmp/lambda-config.json
           aws lambda update-function-configuration \
-            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
-            --timeout 60 \
-            --environment "Variables=$NEW_ENV"
+            --cli-input-json file:///tmp/lambda-config.json
