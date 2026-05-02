@@ -9,6 +9,7 @@ import {
   clearToken,
   setOnAuthFailure,
   fetchPosts as apiFetchPosts,
+  fetchPost as apiFetchPost,
   fetchSubreddits as apiFetchSubreddits,
   fetchComments as apiFetchComments,
   voteOnPost,
@@ -22,6 +23,15 @@ import {
   fetchUnreadCount as apiFetchUnreadCount,
   markNotificationRead as apiMarkNotifRead,
   markAllNotificationsRead as apiMarkAllRead,
+  addEmojiReaction as apiAddEmojiReaction,
+  removeEmojiReaction as apiRemoveEmojiReaction,
+  fetchEmojiReactions as apiFetchEmojiReactions,
+  setDebateSide as apiSetDebateSide,
+  removeDebateSide as apiRemoveDebateSide,
+  getDebateSide as apiGetDebateSide,
+  getDebateSideCounts as apiGetDebateSideCounts,
+  fetchPoll as apiFetchPoll,
+  votePoll as apiVotePoll,
 } from '../api';
 
 export const RedditContext = createContext();
@@ -48,8 +58,178 @@ export const RedditProvider = ({ children }) => {
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    // Load theme preference from localStorage
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('theme');
+      return saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
+    return false;
+  });
+  const [emojiReactions, setEmojiReactions] = useState({}); // { 'post-123': [{emoji, count, userIds}], ... }
+  const [debateSides, setDebateSides] = useState({}); // { 'post-123': 'for'/'against', ... }
+  const [polls, setPolls] = useState({}); // { 'post-123': {id, question, options, userVote}, ... }
   const socketRef = useRef(null);
   const initRef = useRef(false);
+
+  // Toggle dark mode and save preference
+  const toggleDarkMode = useCallback(() => {
+    setIsDarkMode(prev => {
+      const newValue = !prev;
+      localStorage.setItem('theme', newValue ? 'dark' : 'light');
+      if (typeof document !== 'undefined') {
+        if (newValue) {
+          document.body.classList.add('dark');
+          document.body.classList.remove('light');
+        } else {
+          document.body.classList.remove('dark');
+          document.body.classList.add('light');
+        }
+      }
+      return newValue;
+    });
+  }, []);
+
+  // Apply dark mode on mount
+  useEffect(() => {
+    if (isDarkMode) {
+      document.body.classList.add('dark');
+      document.body.classList.remove('light');
+    } else {
+      document.body.classList.remove('dark');
+      document.body.classList.add('light');
+    }
+  }, [isDarkMode]);
+
+  // ── Emoji Reactions ──
+  const addEmojiReaction = useCallback(async (targetType, targetId, emoji) => {
+    try {
+      await apiAddEmojiReaction(targetType, targetId, emoji);
+      // Fetch updated reactions from backend
+      const reactions = await apiFetchEmojiReactions(targetType, targetId);
+      const key = `${targetType}-${targetId}`;
+      setEmojiReactions(prev => ({
+        ...prev,
+        [key]: reactions
+      }));
+    } catch (err) {
+      console.error('Failed to add emoji reaction:', err);
+    }
+  }, []);
+
+  const removeEmojiReaction = useCallback(async (targetType, targetId, emoji) => {
+    try {
+      await apiRemoveEmojiReaction(targetType, targetId, emoji);
+      // Fetch updated reactions from backend
+      const reactions = await apiFetchEmojiReactions(targetType, targetId);
+      const key = `${targetType}-${targetId}`;
+      setEmojiReactions(prev => ({
+        ...prev,
+        [key]: reactions
+      }));
+    } catch (err) {
+      console.error('Failed to remove emoji reaction:', err);
+    }
+  }, []);
+
+  const fetchEmojisForTarget = useCallback(async (targetType, targetId) => {
+    try {
+      const reactions = await apiFetchEmojiReactions(targetType, targetId);
+      const key = `${targetType}-${targetId}`;
+      setEmojiReactions(prev => ({
+        ...prev,
+        [key]: reactions
+      }));
+    } catch (err) {
+      console.error('Failed to fetch emoji reactions:', err);
+    }
+  }, []);
+
+  // ── Debate Sides ──
+  const handleDebateSide = useCallback(async (postId, side) => {
+    try {
+      const currentSide = debateSides[`post-${postId}`];
+      
+      // If clicking the same side again, remove the vote
+      if (currentSide === side) {
+        await apiRemoveDebateSide(postId);
+        setDebateSides(prev => {
+          const updated = { ...prev };
+          delete updated[`post-${postId}`];
+          return updated;
+        });
+      } else {
+        // Otherwise, set the new vote
+        await apiSetDebateSide(postId, side);
+        setDebateSides(prev => ({
+          ...prev,
+          [`post-${postId}`]: side
+        }));
+      }
+      
+      // Fetch updated debate side counts
+      const sidesCounts = await apiGetDebateSideCounts(postId);
+      
+      // Update selected post if it's the one being voted on
+      if (selectedPost?.id === postId) {
+        setSelectedPost(prev => ({
+          ...prev,
+          forCount: sidesCounts.for,
+          againstCount: sidesCounts.against
+        }));
+      }
+      
+      // Update post in the posts array
+      setPosts(prev => prev.map(p => {
+        if (p.id === postId) {
+          return {
+            ...p,
+            forCount: sidesCounts.for,
+            againstCount: sidesCounts.against
+          };
+        }
+        return p;
+      }));
+    } catch (err) {
+      console.error('Failed to set debate side:', err);
+    }
+  }, [debateSides, selectedPost?.id]);
+
+  // ── Polls ──
+  const handlePollVote = useCallback(async (postId, optionId) => {
+    const key = `post-${postId}`;
+    const currentPoll = polls[key] || selectedPost?.poll;
+
+    // Optimistic update: adjust vote counts immediately
+    if (currentPoll) {
+      const prevVoteId = currentPoll.userVote;
+      const updatedOptions = currentPoll.options.map(opt => {
+        let count = opt.voteCount || 0;
+        if (opt.id === prevVoteId) count = Math.max(0, count - 1);
+        if (opt.id === optionId) count += 1;
+        return { ...opt, voteCount: count };
+      });
+      const updatedPoll = { ...currentPoll, options: updatedOptions, userVote: optionId };
+      setPolls(prev => ({ ...prev, [key]: updatedPoll }));
+      setSelectedPost(prev => prev?.id === postId ? { ...prev, poll: updatedPoll } : prev);
+
+      try {
+        await apiVotePoll(optionId);
+      } catch (err) {
+        console.error('Failed to vote on poll:', err);
+        // Revert on failure
+        setPolls(prev => ({ ...prev, [key]: currentPoll }));
+        setSelectedPost(prev => prev?.id === postId ? { ...prev, poll: currentPoll } : prev);
+      }
+    } else {
+      // No local poll state yet — just call API
+      try {
+        await apiVotePoll(optionId);
+      } catch (err) {
+        console.error('Failed to vote on poll:', err);
+      }
+    }
+  }, [polls, selectedPost]);
 
   function normalizeUser(u) {
     return {
@@ -69,6 +249,7 @@ export const RedditProvider = ({ children }) => {
     ]);
     setPosts(postsData.map(normalizePost));
     setUserVotes(extractVotesFromPosts(postsData));
+    setDebateSides(extractDebateSidesFromPosts(postsData));
     setSubreddits(subsData);
   }
 
@@ -147,6 +328,15 @@ export const RedditProvider = ({ children }) => {
     return votes;
   }
 
+  /** Build debateSides entries from posts that have userDebateSide set. */
+  function extractDebateSidesFromPosts(postsData) {
+    const sides = {};
+    for (const p of postsData) {
+      if (p.userDebateSide) sides[`post-${p.id}`] = p.userDebateSide;
+    }
+    return sides;
+  }
+
   function extractVotesFromComments(commentsData) {
     const votes = {};
     for (const c of commentsData) {
@@ -167,6 +357,7 @@ export const RedditProvider = ({ children }) => {
         );
         setPosts(data.map(normalizePost));
         setUserVotes((prev) => ({ ...prev, ...extractVotesFromPosts(data) }));
+        setDebateSides((prev) => ({ ...prev, ...extractDebateSidesFromPosts(data) }));
       } catch (err) {
         console.error('Failed to fetch posts:', err);
       }
@@ -186,6 +377,59 @@ export const RedditProvider = ({ children }) => {
       }
     })();
   }, [selectedPost]);
+
+  // ── Fetch debate side counts and poll when a post is selected ──
+  useEffect(() => {
+    if (!selectedPost) return;
+    (async () => {
+      try {
+        // Fetch user's current debate side
+        const userSide = await apiGetDebateSide(selectedPost.id);
+        if (userSide.side) {
+          setDebateSides(prev => ({
+            ...prev,
+            [`post-${selectedPost.id}`]: userSide.side
+          }));
+        } else {
+          // Clear the side if not set
+          setDebateSides(prev => {
+            const updated = { ...prev };
+            delete updated[`post-${selectedPost.id}`];
+            return updated;
+          });
+        }
+        
+        // Fetch debate side counts
+        const sidesCounts = await apiGetDebateSideCounts(selectedPost.id);
+        
+        // Fetch poll
+        const poll = await apiFetchPoll(selectedPost.id);
+        
+        // Update selected post with new data
+        setSelectedPost(prev => ({
+          ...prev,
+          forCount: sidesCounts.for,
+          againstCount: sidesCounts.against,
+          poll: poll || null
+        }));
+        
+        // Also update the post in the posts array
+        setPosts(prev => prev.map(p => {
+          if (p.id === selectedPost.id) {
+            return {
+              ...p,
+              forCount: sidesCounts.for,
+              againstCount: sidesCounts.against,
+              poll: poll || null
+            };
+          }
+          return p;
+        }));
+      } catch (err) {
+        console.warn('Failed to fetch debate sides or poll:', err);
+      }
+    })();
+  }, [selectedPost?.id]);
 
   // ── Socket.IO for writing feedback ──
   useEffect(() => {
@@ -312,6 +556,61 @@ export const RedditProvider = ({ children }) => {
     return posts;
   }, [posts]);
 
+  // Load a specific post by ID (for direct URL access)
+  const loadPostFromURL = useCallback(async (postId) => {
+    try {
+      const post = await apiFetchPost(postId);
+      const normalized = normalizePost(post);
+      setSelectedPost(normalized);
+      
+      // Also fetch comments for this post
+      const commentsData = await apiFetchComments(postId);
+      setComments(commentsData.map((c) => ({
+        ...c,
+        timestamp: new Date(c.timestamp),
+      })));
+      
+      // Fetch emoji reactions for post
+      try {
+        const emojiReactions = await apiFetchEmojiReactions('post', postId);
+        setEmojiReactions(prev => ({
+          ...prev,
+          [`post-${postId}`]: emojiReactions
+        }));
+      } catch (err) {
+        console.warn('Failed to fetch emoji reactions:', err);
+      }
+
+      // Fetch debate side counts
+      try {
+        const sidesCounts = await apiGetDebateSideCounts(postId);
+        normalized.forCount = sidesCounts.for;
+        normalized.againstCount = sidesCounts.against;
+      } catch (err) {
+        console.warn('Failed to fetch debate side counts:', err);
+      }
+
+      // Fetch poll for post
+      try {
+        const poll = await apiFetchPoll(postId);
+        if (poll) {
+          setPolls(prev => ({
+            ...prev,
+            [`post-${postId}`]: poll
+          }));
+          normalized.poll = poll;
+        }
+      } catch (err) {
+        // No poll for this post, which is fine
+      }
+      
+      return normalized;
+    } catch (err) {
+      console.error('Failed to load post from URL:', err);
+      return null;
+    }
+  }, []);
+
   // DS1-US1: Toggle AI reasoning summary for a comment
   const toggleSummary = useCallback((commentId) => {
     setExpandedSummaries((prev) => ({
@@ -326,7 +625,7 @@ export const RedditProvider = ({ children }) => {
   }, [expandedSummaries]);
 
   // DS3-US3: Analyze draft text via Socket.IO
-  const analyzeDraft = useCallback((draftText) => {
+  const analyzeDraft = useCallback((draftText, postId) => {
     if (!draftText || draftText.trim().length < 10) {
       setDraftFeedback(null);
       return;
@@ -336,12 +635,12 @@ export const RedditProvider = ({ children }) => {
 
     const socket = socketRef.current;
     if (socket && socket.connected) {
-      socket.emit('draft:analyze', { draftText });
+      socket.emit('draft:analyze', { draftText, contextId: postId });
     } else {
       // Fallback: try reconnecting
       const newSocket = getComposerSocket();
       socketRef.current = newSocket;
-      newSocket.emit('draft:analyze', { draftText });
+      newSocket.emit('draft:analyze', { draftText, contextId: postId });
     }
   }, []);
 
@@ -359,14 +658,16 @@ export const RedditProvider = ({ children }) => {
         { ...newComment, timestamp: new Date(newComment.timestamp) },
       ]);
       handleComment(postId);
+      return { success: true };
     } catch (err) {
       console.error('Add comment failed:', err);
+      return { success: false, error: err.message || 'Failed to post comment' };
     }
   }, [handleComment]);
 
   // Create a new post
-  const createPost = useCallback(async (title, content, subreddit, image) => {
-    const newPost = await apiCreatePost(title, content, subreddit, image);
+  const createPost = useCallback(async (title, content, subreddit, image, poll) => {
+    const newPost = await apiCreatePost(title, content, subreddit, image, poll);
     setPosts((prev) => [normalizePost(newPost), ...prev]);
     return newPost;
   }, []);
@@ -434,6 +735,7 @@ export const RedditProvider = ({ children }) => {
     handleComment,
     joinSubreddit,
     getFeedPosts,
+    loadPostFromURL,
     comments,
     userVotes,
     // DS1-US1: AI Reasoning Summary
@@ -453,6 +755,21 @@ export const RedditProvider = ({ children }) => {
     unreadCount,
     markNotifRead,
     markAllNotifsRead,
+    // Theme
+    isDarkMode,
+    toggleDarkMode,
+    // Emoji Reactions
+    addEmojiReaction,
+    removeEmojiReaction,
+    fetchEmojisForTarget,
+    emojiReactions,
+    // Debate Sides
+    handleDebateSide,
+    debateSides,
+    // Polls
+    handlePollVote,
+    polls,
+    setPolls,
   };
 
   return (
@@ -461,3 +778,5 @@ export const RedditProvider = ({ children }) => {
     </RedditContext.Provider>
   );
 };
+
+export default RedditProvider;

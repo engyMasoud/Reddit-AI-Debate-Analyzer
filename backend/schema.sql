@@ -156,6 +156,70 @@ CREATE INDEX idx_feedback_user    ON feedback_logs(user_id);
 CREATE INDEX idx_feedback_draft   ON feedback_logs(draft_id);
 CREATE INDEX idx_feedback_created ON feedback_logs(created_at DESC);
 
+-- 11. emoji_reactions (for emoji reactions feature)
+CREATE TABLE emoji_reactions (
+    id           SERIAL PRIMARY KEY,
+    user_id      INTEGER      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    target_type  VARCHAR(20)  NOT NULL CHECK (target_type IN ('post', 'comment')),
+    target_id    INTEGER      NOT NULL,
+    emoji        VARCHAR(10)  NOT NULL,
+    created_at   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, target_type, target_id, emoji)
+);
+
+CREATE INDEX idx_reactions_target   ON emoji_reactions(target_type, target_id);
+CREATE INDEX idx_reactions_user     ON emoji_reactions(user_id);
+CREATE INDEX idx_reactions_emoji    ON emoji_reactions(emoji);
+
+-- 12. debate_sides (for tracking debate position: for/against/neutral)
+CREATE TABLE debate_sides (
+    id           SERIAL PRIMARY KEY,
+    user_id      INTEGER      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    post_id      INTEGER      NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    side         VARCHAR(20)  NOT NULL CHECK (side IN ('for', 'against', 'neutral')),
+    created_at   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    updated_at   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, post_id)
+);
+
+CREATE INDEX idx_debate_sides_user  ON debate_sides(user_id);
+CREATE INDEX idx_debate_sides_post  ON debate_sides(post_id);
+CREATE INDEX idx_debate_sides_side  ON debate_sides(side);
+
+-- 13. polls (for poll posts)
+CREATE TABLE polls (
+    id           SERIAL PRIMARY KEY,
+    post_id      INTEGER      NOT NULL UNIQUE REFERENCES posts(id) ON DELETE CASCADE,
+    question     TEXT         NOT NULL,
+    created_at   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    ends_at      TIMESTAMP    DEFAULT (CURRENT_TIMESTAMP + INTERVAL '7 days')
+);
+
+CREATE INDEX idx_polls_post  ON polls(post_id);
+CREATE INDEX idx_polls_ends  ON polls(ends_at);
+
+-- 14. poll_options (answer options for a poll)
+CREATE TABLE poll_options (
+    id       SERIAL PRIMARY KEY,
+    poll_id  INTEGER NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+    text     TEXT    NOT NULL,
+    position INTEGER NOT NULL
+);
+
+CREATE INDEX idx_poll_options_poll ON poll_options(poll_id);
+
+-- 15. poll_votes (user votes on poll options)
+CREATE TABLE poll_votes (
+    id           SERIAL PRIMARY KEY,
+    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    option_id    INTEGER NOT NULL REFERENCES poll_options(id) ON DELETE CASCADE,
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, option_id)
+);
+
+CREATE INDEX idx_poll_votes_user    ON poll_votes(user_id);
+CREATE INDEX idx_poll_votes_option  ON poll_votes(option_id);
+
 -- ============================================================
 -- Seed Data  (matches frontend mockData.js)
 -- ============================================================
@@ -187,11 +251,12 @@ INSERT INTO subreddits (name, icon, member_count, color) VALUES
   ('Games',            '🎮', 3500000, 'bg-blue-400'),
   ('Food',             '🍕', 2100000, 'bg-orange-500'),
   ('Music',            '🎵', 2900000, 'bg-pink-500'),
-  ('Travel',           '✈️',  1600000, 'bg-indigo-500');
+  ('Travel',           '✈️',  1600000, 'bg-indigo-500'),
+  ('Social',           '👥', 2400000, 'bg-amber-500');
 
 -- Seed user-subreddit memberships for CurrentUser (id=1)
 INSERT INTO user_subreddit_memberships (user_id, subreddit_id) VALUES
-  (1, 1), (1, 2), (1, 3), (1, 4), (1, 5);
+  (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 9);
 
 -- Seed posts (author IDs match the users above)
 INSERT INTO posts (title, content, author_id, subreddit_id, upvotes, downvotes, comment_count, image, created_at) VALUES

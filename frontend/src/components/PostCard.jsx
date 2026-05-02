@@ -1,6 +1,8 @@
 import { useContext } from 'react';
 import { ChevronUp, ChevronDown, MessageCircle, Sparkles } from 'lucide-react';
 import { RedditContext } from '../context/RedditContext';
+import EmojiReactions from './EmojiReactions';
+import DebateSides from './DebateSides';
 
 /**
  * PostRow — compact horizontal list row for the main feed.
@@ -38,7 +40,7 @@ export default function PostRow({ post }) {
 
   return (
     <article
-      className="flex items-start gap-4 py-4 px-5 group cursor-pointer bg-white rounded-xl shadow-sm hover:shadow-md transition"
+      className="flex items-start gap-4 py-4 px-5 group cursor-pointer bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md dark:hover:shadow-lg dark:shadow-black/20 transition"
       onClick={handlePostClick}
       aria-label={`Thread: ${post.title} by ${post.author}`}
     >
@@ -73,17 +75,27 @@ export default function PostRow({ post }) {
 
       {/* Middle: Title + Metadata */}
       <div className="flex-1 min-w-0">
-        <h3 className="text-[15px] font-semibold text-gray-900 leading-snug group-hover:text-violet-700 transition-colors line-clamp-2">
+        <h3 className="text-[15px] font-semibold text-gray-900 dark:text-gray-100 leading-snug group-hover:text-violet-700 dark:group-hover:text-violet-400 transition-colors line-clamp-2">
           {post.title}
         </h3>
-        <div className="flex items-center gap-2 mt-1.5 text-xs text-gray-400 flex-wrap">
-          <span className="font-medium text-gray-500">{post.author}</span>
+        <div className="flex items-center gap-2 mt-1.5 text-xs text-gray-400 dark:text-gray-500 flex-wrap">
+          <span className="font-medium text-gray-500 dark:text-gray-400">{post.author}</span>
           <span>·</span>
           <span>{formatDate(post.timestamp)}</span>
           <span>·</span>
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-violet-50 text-violet-600 text-[11px] font-medium">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 text-[11px] font-medium">
             {post.subreddit}
           </span>
+        </div>
+        
+        {/* Emoji Reactions & Debate Sides */}
+        <div className="flex flex-col gap-2 mt-3">
+          <div onClick={(e) => e.stopPropagation()}>
+            <EmojiReactions targetType="post" targetId={post.id} reactions={post.emojiReactions || []} />
+          </div>
+          <div onClick={(e) => e.stopPropagation()}>
+            <DebateSides postId={post.id} forCount={post.forCount || 0} againstCount={post.againstCount || 0} />
+          </div>
         </div>
       </div>
 

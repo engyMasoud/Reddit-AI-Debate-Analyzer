@@ -8,6 +8,8 @@ import { app, cacheService } from './app';
 import { WritingFeedbackSessionManager } from './services/WritingFeedbackSessionManager';
 import { WritingFeedbackService } from './services/WritingFeedbackService';
 import { MockAIAnalysisService } from './services/MockAIAnalysisService';
+import { AIAnalysisService } from './services/AIAnalysisService';
+import { IAIAnalysisService } from './services/interfaces/IAIAnalysisService';
 import { InMemoryCacheService } from './services/InMemoryCacheService';
 import { FeedbackLogRepository } from './repositories/FeedbackLogRepository';
 import { DraftRepository } from './repositories/DraftRepository';
@@ -25,7 +27,11 @@ const io = new SocketIOServer(server, {
 });
 
 // ── WebSocket services (local dev only) ──
-const wsAiService = new MockAIAnalysisService();
+// Use real OpenAI service if API key is provided, otherwise use mock
+const wsAiService: IAIAnalysisService = env.OPENAI_API_KEY
+  ? new AIAnalysisService(env.OPENAI_API_KEY, env.OPENAI_MODEL)
+  : new MockAIAnalysisService();
+
 const wsCacheService = new InMemoryCacheService();
 const sessionManager = new WritingFeedbackSessionManager();
 const feedbackLogRepo = new FeedbackLogRepository(pool);
@@ -34,7 +40,7 @@ const writingFeedbackService = new WritingFeedbackService(
   wsAiService, wsCacheService, feedbackLogRepo
 );
 
-setupComposerNamespace(io, writingFeedbackService, sessionManager, draftRepo);
+setupComposerNamespace(io, writingFeedbackService, sessionManager, draftRepo, pool);
 
 // ── Start server ──
 server.listen(env.PORT, () => {

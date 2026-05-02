@@ -10,6 +10,7 @@ export function setupComposerNamespace(
   feedbackService: WritingFeedbackService,
   sessionManager: WritingFeedbackSessionManager,
   draftRepo: DraftRepository,
+  pool?: any, // PostgreSQL pool for fetching post context
 ): void {
   const composerNs = io.of('/composer');
 
@@ -49,7 +50,7 @@ export function setupComposerNamespace(
     // draft:analyze event
     socket.on('draft:analyze', async (payload: { draftText: string; contextId?: number }) => {
       try {
-        const { draftText } = payload;
+        const { draftText, contextId } = payload;
 
         if (!draftText || typeof draftText !== 'string' || draftText.length === 0 || draftText.length > 10000) {
           socket.emit('feedback:error', {
@@ -59,16 +60,46 @@ export function setupComposerNamespace(
           return;
         }
 
-        // Check if analysis is already in flight
+        // Always update the draft (latest version)
+        sessionManager.updateDraft(userId, draftText);
+
+        // Check if analysis is already in flight - if so, we'll re-analyze after it completes
         if (sessionManager.isAnalysisInFlight(userId)) {
-          return; // Drop duplicate request
+          console.log(`[Composer] Analysis already in flight for user ${userId}, will re-analyze after completion`);
+          return; // Queue implicit retry
         }
 
         sessionManager.markAnalysisInFlight(userId);
-        sessionManager.updateDraft(userId, draftText);
 
         try {
-          const { feedbackId, result } = await feedbackService.analyzeDraftAndLog(draftText, userId);
+          // Fetch post context if contextId provided
+          let postContext = '';
+          if (contextId && pool) {
+            try {
+              const { rows } = await pool.query(
+                'SELECT title, content FROM posts WHERE id = $1',
+                [contextId],
+              );
+              if (rows.length > 0) {
+                postContext = `Post Title: ${rows[0].title}\n\nPost Content: ${rows[0].content}`;
+                console.log(`[Composer] Found post context for ID ${contextId}: "${rows[0].title}"`);
+              } else {
+                console.log(`[Composer] No post found for ID ${contextId}`);
+              }
+            } catch (err) {
+              console.warn('Failed to fetch post context:', err);
+            }
+          } else {
+            console.log(`[Composer] No contextId provided or pool unavailable`);
+          }
+
+          console.log(`[Composer] Analyzing draft (${draftText.length} chars) with context: ${postContext.length > 0 ? 'YES' : 'NO'}`);
+          const { feedbackId, result } = await feedbackService.analyzeDraftAndLog(
+            draftText,
+            userId,
+            undefined,
+            postContext || undefined,
+          );
 
           sessionManager.updateFeedback(userId, result);
 
@@ -81,6 +112,9 @@ export function setupComposerNamespace(
             confidence: result.confidence,
             generatedAt: result.generatedAt.toISOString(),
           });
+
+          // CRITICAL: Clear the analysisInFlight flag after successful emission
+          sessionManager.clearAnalysisInFlight(userId);
         } catch (err) {
           sessionManager.clearAnalysisInFlight(userId);
           console.error('Analysis error:', err);

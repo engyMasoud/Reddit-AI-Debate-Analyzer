@@ -1,4 +1,4 @@
-import { useState, useContext } from 'react';
+import { useState, useContext, useEffect } from 'react';
 import { RedditProvider, RedditContext } from './context/RedditContext';
 import './index.css';
 import Navbar from './components/Navbar';
@@ -10,7 +10,44 @@ import { Sparkles, Loader2 } from 'lucide-react';
 
 function AppContent() {
   const [showCreatePost, setShowCreatePost] = useState(false);
-  const { isAuthenticated, authLoading } = useContext(RedditContext);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
+  const { isAuthenticated, authLoading, loadPostFromURL, selectedPost } = useContext(RedditContext);
+
+  // Handle URL-based post navigation (on initial load from shared link)
+  useEffect(() => {
+    if (!isAuthenticated || authLoading) return;
+    
+    const path = window.location.pathname;
+    const match = path.match(/^\/post\/(\d+)$/);
+    
+    if (match) {
+      const postId = parseInt(match[1], 10);
+      loadPostFromURL(postId);
+      setInitialLoadDone(true);
+    } else {
+      setInitialLoadDone(true);
+    }
+  }, [isAuthenticated, authLoading, loadPostFromURL]);
+
+  // Sync URL with navigation (update URL when user navigates between posts)
+  useEffect(() => {
+    if (!initialLoadDone || authLoading) return;
+    
+    const currentPath = window.location.pathname;
+    
+    if (selectedPost) {
+      const targetPath = `/post/${selectedPost.id}`;
+      // Only update if URL is different to avoid unnecessary pushState calls
+      if (currentPath !== targetPath) {
+        window.history.pushState({ postId: selectedPost.id }, '', targetPath);
+      }
+    } else {
+      // User closed the modal or navigated away, reset to home
+      if (currentPath !== '/') {
+        window.history.pushState({ }, '', '/');
+      }
+    }
+  }, [selectedPost, initialLoadDone, authLoading]);
 
   if (authLoading) {
     return (

@@ -17,11 +17,11 @@ async function ensureTestSubreddit() {
     await pool.query(
       `INSERT INTO subreddits (name, icon, color) VALUES ($1, $2, $3)
        ON CONFLICT (name) DO NOTHING`,
-      ['test', '🧪', 'bg-blue-500']
+      ['Social', '👥', 'bg-amber-500']
     );
-    console.log('Test subreddit ensured.');
+    console.log('Social subreddit ensured.');
   } catch (err) {
-    console.error('Error ensuring test subreddit:', err);
+    console.error('Error ensuring Social subreddit:', err);
     process.exit(1);
   } finally {
     await pool.end();

@@ -7,6 +7,7 @@ export const mockSubreddits = [
   { id: 6, name: "Food", icon: "🍕", memberCount: 2100000, color: "bg-orange-500" },
   { id: 7, name: "Music", icon: "🎵", memberCount: 2900000, color: "bg-pink-500" },
   { id: 8, name: "Travel", icon: "✈️", memberCount: 1600000, color: "bg-indigo-500" },
+  { id: 9, name: "Social", icon: "👥", memberCount: 2400000, color: "bg-amber-500" },
 ];
 
 export const mockPosts = [
