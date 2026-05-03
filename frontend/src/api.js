@@ -352,8 +352,10 @@ export async function fetchReasoningSummary(commentId) {
   const res = await fetch(`${API_BASE}/comments/${commentId}/reasoning-summary`, {
     headers: authHeaders(),
   });
+  if (res.status === 202) return { status: 'pending' };
   if (!res.ok) throw new Error('Failed to fetch reasoning summary');
-  return res.json();
+  const data = await res.json();
+  return { status: 'done', ...data };
 }
 
 // ── US3: Writing Feedback (REST fallback) ──

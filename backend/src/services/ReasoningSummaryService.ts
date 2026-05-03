@@ -15,10 +15,11 @@ export class ReasoningSummaryService implements IReasoningSummaryService {
     private summaryRepo: ReasoningSummaryRepository,
   ) {}
 
-  async getSummary(commentId: number): Promise<ReasoningSummaryDTO> {
+  async getSummary(commentId: number): Promise<ReasoningSummaryDTO | null> {
     const cacheKey = `reasoning_summary:${commentId}`;
+    const pendingKey = `reasoning_summary_pending:${commentId}`;
 
-    // 1. Check cache
+    // 1. Check result cache
     const cached = await this.cache.get<ReasoningSummaryDTO>(cacheKey);
     if (cached) return cached;
 
@@ -30,7 +31,11 @@ export class ReasoningSummaryService implements IReasoningSummaryService {
       return dto;
     }
 
-    // 3. Fetch comment and generate
+    // 3. Already generating — tell caller to poll
+    const pending = await this.cache.get<string>(pendingKey);
+    if (pending) return null;
+
+    // 4. Fetch comment — 404 if not found
     const comment = await this.commentRepo.getById(commentId);
     if (!comment) {
       const err: any = new Error(`No comment found with id ${commentId}`);
@@ -39,7 +44,18 @@ export class ReasoningSummaryService implements IReasoningSummaryService {
       throw err;
     }
 
-    return this.generateAndCacheSummary(comment);
+    // 5. Mark as pending and kick off generation in the background.
+    //    Lambda keeps running after sending the HTTP response because
+    //    callbackWaitsForEmptyEventLoop defaults to true.
+    await this.cache.set(pendingKey, { generating: true }, 120);
+    this.generateAndCacheSummary(comment).catch(err => {
+      console.error('[ReasoningSummaryService] background generation failed:', err);
+    }).finally(() => {
+      this.cache.delete(pendingKey).catch(() => {});
+    });
+
+    // Return null → caller sends 202
+    return null;
   }
 
   async generateAndCacheSummary(comment: Comment): Promise<ReasoningSummaryDTO> {

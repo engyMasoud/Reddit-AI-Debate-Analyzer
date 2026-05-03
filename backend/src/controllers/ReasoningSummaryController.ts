@@ -18,6 +18,12 @@ export class ReasoningSummaryController {
 
       const summary = await this.reasoningSummaryService.getSummary(commentId);
 
+      if (summary === null) {
+        // Generation kicked off in background — tell client to poll
+        res.status(202).json({ status: 'pending', commentId });
+        return;
+      }
+
       res.json({
         commentId: summary.commentId,
         summary: summary.summary,

@@ -1,4 +1,4 @@
-import { useContext, useState } from 'react';
+import { useContext, useState, useEffect, useRef } from 'react';
 import { ChevronDown, ChevronUp, Sparkles, Shield, BookOpen, Check, Loader2, AlertTriangle } from 'lucide-react';
 import { RedditContext } from '../context/RedditContext';
 import { fetchReasoningSummary } from '../api';
@@ -11,10 +11,52 @@ import { fetchReasoningSummary } from '../api';
  */
 export default function ReasoningSummaryPanel({ comment }) {
   const { toggleSummary, isSummaryExpanded } = useContext(RedditContext);
-  const [panelState, setPanelState] = useState('idle'); // idle | loading | success | error | empty
+  const [panelState, setPanelState] = useState('idle'); // idle | loading | polling | success | error | empty
   const [aiSummary, setAiSummary] = useState(null);
+  const pollRef = useRef(null);
+  const pollCountRef = useRef(0);
 
   const expanded = isSummaryExpanded(comment.id);
+
+  // Clear polling interval on unmount or collapse
+  useEffect(() => {
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
+
+  const applyData = (data) => {
+    setAiSummary({
+      summary: data.summary,
+      primaryClaim: data.primaryClaim,
+      evidenceBlocks: data.evidenceBlocks,
+      coherenceScore: data.coherenceScore,
+      generatedAt: new Date(data.generatedAt),
+    });
+    setPanelState('success');
+  };
+
+  const startPolling = () => {
+    pollCountRef.current = 0;
+    setPanelState('polling');
+    pollRef.current = setInterval(async () => {
+      pollCountRef.current += 1;
+      if (pollCountRef.current > 20) {
+        clearInterval(pollRef.current);
+        setPanelState('error');
+        return;
+      }
+      try {
+        const data = await fetchReasoningSummary(comment.id);
+        if (data.status === 'done') {
+          clearInterval(pollRef.current);
+          applyData(data);
+        }
+        // status === 'pending' → keep polling
+      } catch {
+        clearInterval(pollRef.current);
+        setPanelState('error');
+      }
+    }, 3000);
+  };
 
   const handleToggle = async () => {
     if (!expanded) {
@@ -22,35 +64,31 @@ export default function ReasoningSummaryPanel({ comment }) {
       setPanelState('loading');
       try {
         const data = await fetchReasoningSummary(comment.id);
-        setAiSummary({
-          summary: data.summary,
-          primaryClaim: data.primaryClaim,
-          evidenceBlocks: data.evidenceBlocks,
-          coherenceScore: data.coherenceScore,
-          generatedAt: new Date(data.generatedAt),
-        });
-        setPanelState('success');
+        if (data.status === 'pending') {
+          startPolling();
+        } else {
+          applyData(data);
+        }
       } catch {
         setPanelState('error');
       }
     } else {
+      if (pollRef.current) clearInterval(pollRef.current);
       toggleSummary(comment.id);
       setPanelState('idle');
     }
   };
 
   const handleRetry = async () => {
+    if (pollRef.current) clearInterval(pollRef.current);
     setPanelState('loading');
     try {
       const data = await fetchReasoningSummary(comment.id);
-      setAiSummary({
-        summary: data.summary,
-        primaryClaim: data.primaryClaim,
-        evidenceBlocks: data.evidenceBlocks,
-        coherenceScore: data.coherenceScore,
-        generatedAt: new Date(data.generatedAt),
-      });
-      setPanelState('success');
+      if (data.status === 'pending') {
+        startPolling();
+      } else {
+        applyData(data);
+      }
     } catch {
       setPanelState('error');
     }
@@ -128,13 +166,17 @@ export default function ReasoningSummaryPanel({ comment }) {
       {expanded && (
         <div className="mt-3 animate-fadeIn">
           {/* ── STATE 1: Loading ── */}
-          {panelState === 'loading' && (
+          {(panelState === 'loading' || panelState === 'polling') && (
             <div className="bg-violet-50 border border-violet-200 rounded-2xl p-5">
               <div className="flex items-center gap-3 mb-4">
                 <Loader2 size={20} className="text-violet-500 animate-spin" />
                 <div>
                   <p className="text-sm font-semibold text-violet-800">Analyzing argument...</p>
-                  <p className="text-xs text-violet-500">Extracting claims, evaluating evidence, and assessing coherence.</p>
+                  <p className="text-xs text-violet-500">
+                    {panelState === 'polling'
+                      ? 'AI is generating your summary — this takes up to 60 seconds.'
+                      : 'Extracting claims, evaluating evidence, and assessing coherence.'}
+                  </p>
                 </div>
               </div>
               {/* Skeleton text bars */}
