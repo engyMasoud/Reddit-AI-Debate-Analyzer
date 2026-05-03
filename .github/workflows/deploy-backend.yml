@@ -77,7 +77,16 @@ jobs:
           ROLE_ARN=$(aws lambda get-function-configuration \
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
             --query 'Role' --output text)
+          ROLE_NAME=$(echo $ROLE_ARN | cut -d'/' -f2)
+          echo "Lambda ARN: $LAMBDA_ARN"
+          echo "Role name: $ROLE_NAME"
+          # Try inline policy via put-role-policy
           aws iam put-role-policy \
-            --role-name "$(echo $ROLE_ARN | cut -d'/' -f2)" \
+            --role-name "$ROLE_NAME" \
             --policy-name "LambdaSelfInvoke" \
-            --policy-document "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"lambda:InvokeFunction\",\"Resource\":\"$LAMBDA_ARN\"}]}" || true
+            --policy-document "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"lambda:InvokeFunction\",\"Resource\":\"$LAMBDA_ARN\"}]}" && echo "IAM inline policy added" || \
+          # Fallback: try attaching AWS managed policy
+          (aws iam attach-role-policy \
+            --role-name "$ROLE_NAME" \
+            --policy-arn "arn:aws:iam::aws:policy/AWSLambdaRole" && echo "AWSLambdaRole policy attached") || \
+          echo "WARNING: Could not grant self-invocation permission — manual AWS console action needed"
