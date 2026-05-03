@@ -6,7 +6,6 @@ import { ReasoningSummaryRepository } from '../repositories/ReasoningSummaryRepo
 import { ReasoningSummaryDTO, ReasoningSummaryRow } from '../models/ReasoningSummary';
 import { Comment } from '../models/Comment';
 import { env } from '../config/env';
-import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 
 export class ReasoningSummaryService implements IReasoningSummaryService {
   constructor(
@@ -40,46 +39,9 @@ export class ReasoningSummaryService implements IReasoningSummaryService {
       throw err;
     }
 
-    // 5. Kick off background generation via async Lambda self-invocation.
-    //    InvocationType: 'Event' enqueues the job and returns ~202 in <1s.
-    //    We await with a 5s AbortController timeout so the HTTP request is actually
-    //    dispatched before the handler returns (fire-and-forget Promises are suspended
-    //    when the async Lambda handler resolves), while bounding the delay if the
-    //    Lambda service endpoint is unreachable from this VPC.
-    const functionName = process.env.AWS_LAMBDA_FUNCTION_NAME;
-    if (functionName) {
-      const ac = new AbortController();
-      const timer = setTimeout(() => ac.abort(), 5000);
-      try {
-        const client = new LambdaClient({});
-        await client.send(new InvokeCommand({
-          FunctionName: functionName,
-          InvocationType: 'Event', // async: Lambda API returns 202 immediately after enqueueing
-          Payload: Buffer.from(JSON.stringify({
-            type: 'generate_reasoning_summary',
-            commentId: comment.id,
-            commentText: comment.text,
-            commentPostId: comment.postId,
-          })),
-        }), { abortSignal: ac.signal });
-        console.log(`[ReasoningSummaryService] background invocation enqueued for comment ${comment.id}`);
-      } catch (err: any) {
-        console.error(
-          `[ReasoningSummaryService] Lambda invoke failed — ` +
-          `name=${err.name} code=${err.Code ?? err.code} msg=${err.message}`
-        );
-      } finally {
-        clearTimeout(timer);
-      }
-    } else {
-      // Fallback for local dev (no Lambda): run synchronously
-      this.generateAndCacheSummary(comment).catch(err =>
-        console.error('[ReasoningSummaryService] local background generation failed:', err)
-      );
-    }
-
-    // Return null → caller sends 202
-    return null;
+    // 4. Generate synchronously — gpt-4o-mini single consolidated call completes ~5-10s,
+    //    well under the 29s API Gateway limit.
+    return await this.generateAndCacheSummary(comment);
   }
 
   async generateAndCacheSummary(comment: Comment): Promise<ReasoningSummaryDTO> {
