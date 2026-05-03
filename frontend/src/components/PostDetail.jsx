@@ -66,7 +66,15 @@ export default function PostDetail() {
   }, [selectedPost?.id, selectedPost?.poll, setSelectedPost]);
 
   // ── Build comment tree (must be before early return to satisfy rules of hooks) ──
-  const post = selectedPost ? (posts.find((p) => p.id === selectedPost.id) || selectedPost) : null;
+  // Prefer fresh data from `posts` (votes/comment counts), but keep dynamic
+  // fields that only live on `selectedPost` (e.g. the lazily-fetched `poll`).
+  const post = selectedPost
+    ? (() => {
+        const fromList = posts.find((p) => p.id === selectedPost.id);
+        if (!fromList) return selectedPost;
+        return { ...fromList, poll: selectedPost.poll ?? fromList.poll };
+      })()
+    : null;
   const allComments = post ? getPostComments(post.id) : [];
 
   const commentTree = useMemo(() => {
