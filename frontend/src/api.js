@@ -2,23 +2,20 @@
 
 
 import { io } from 'socket.io-client';
+import { getViteApiUrl } from './viteEnv.js';
 
-// Robust API base URL selection for all environments (Vite, Node, Jest)
+// Robust API base URL selection for all environments (Vite, Node, Jest).
+// IMPORTANT: must be resolved synchronously at module load — an async dynamic
+// import here causes the very first request after page reload (auth/me) to
+// hit the default '/api/v1' before the real URL arrives, which appeared as
+// "logged out on refresh".
 let API_BASE = '/api/v1';
 if (typeof process !== 'undefined' && process.env && process.env.VITE_API_URL) {
   API_BASE = process.env.VITE_API_URL;
-} else if (typeof window !== 'undefined') {
-  // Dynamically import viteEnv.js only in the browser
-  try {
-    // This will only run in the browser, never in Node/Jest
-    import('./viteEnv.js').then(mod => {
-      const viteUrl = mod.getViteApiUrl();
-      if (viteUrl) {
-        API_BASE = viteUrl;
-      }
-    });
-  } catch (e) {
-    // Ignore if import fails
+} else {
+  const viteUrl = getViteApiUrl();
+  if (viteUrl) {
+    API_BASE = viteUrl;
   }
 }
 
