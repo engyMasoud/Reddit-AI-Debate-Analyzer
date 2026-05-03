@@ -68,3 +68,16 @@ jobs:
             > /tmp/lambda-config.json
           aws lambda update-function-configuration \
             --cli-input-json file:///tmp/lambda-config.json
+
+      - name: Grant Lambda self-invocation permission
+        run: |
+          LAMBDA_ARN=$(aws lambda get-function-configuration \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --query 'FunctionArn' --output text)
+          ROLE_ARN=$(aws lambda get-function-configuration \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --query 'Role' --output text)
+          aws iam put-role-policy \
+            --role-name "$(echo $ROLE_ARN | cut -d'/' -f2)" \
+            --policy-name "LambdaSelfInvoke" \
+            --policy-document "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"lambda:InvokeFunction\",\"Resource\":\"$LAMBDA_ARN\"}]}" || true

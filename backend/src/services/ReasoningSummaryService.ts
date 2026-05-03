@@ -6,6 +6,7 @@ import { ReasoningSummaryRepository } from '../repositories/ReasoningSummaryRepo
 import { ReasoningSummaryDTO, ReasoningSummaryRow } from '../models/ReasoningSummary';
 import { Comment } from '../models/Comment';
 import { env } from '../config/env';
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 
 export class ReasoningSummaryService implements IReasoningSummaryService {
   constructor(
@@ -17,7 +18,6 @@ export class ReasoningSummaryService implements IReasoningSummaryService {
 
   async getSummary(commentId: number): Promise<ReasoningSummaryDTO | null> {
     const cacheKey = `reasoning_summary:${commentId}`;
-    const pendingKey = `reasoning_summary_pending:${commentId}`;
 
     // 1. Check result cache
     const cached = await this.cache.get<ReasoningSummaryDTO>(cacheKey);
@@ -31,11 +31,7 @@ export class ReasoningSummaryService implements IReasoningSummaryService {
       return dto;
     }
 
-    // 3. Already generating — tell caller to poll
-    const pending = await this.cache.get<string>(pendingKey);
-    if (pending) return null;
-
-    // 4. Fetch comment — 404 if not found
+    // 3. Fetch comment — 404 if not found
     const comment = await this.commentRepo.getById(commentId);
     if (!comment) {
       const err: any = new Error(`No comment found with id ${commentId}`);
@@ -44,15 +40,32 @@ export class ReasoningSummaryService implements IReasoningSummaryService {
       throw err;
     }
 
-    // 5. Mark as pending and kick off generation in the background.
-    //    Lambda keeps running after sending the HTTP response because
-    //    callbackWaitsForEmptyEventLoop defaults to true.
-    await this.cache.set(pendingKey, { generating: true }, 120);
-    this.generateAndCacheSummary(comment).catch(err => {
-      console.error('[ReasoningSummaryService] background generation failed:', err);
-    }).finally(() => {
-      this.cache.delete(pendingKey).catch(() => {});
-    });
+    // 5. Kick off background generation via async Lambda self-invocation.
+    //    InvocationType: 'Event' returns immediately — no API Gateway 29s limit applies.
+    const functionName = process.env.AWS_LAMBDA_FUNCTION_NAME;
+    if (functionName) {
+      try {
+        const client = new LambdaClient({});
+        await client.send(new InvokeCommand({
+          FunctionName: functionName,
+          InvocationType: 'Event', // fire-and-forget
+          Payload: Buffer.from(JSON.stringify({
+            type: 'generate_reasoning_summary',
+            commentId: comment.id,
+            commentText: comment.text,
+            commentPostId: comment.postId,
+          })),
+        }));
+        console.log(`[ReasoningSummaryService] async invocation triggered for comment ${comment.id}`);
+      } catch (err: any) {
+        console.error('[ReasoningSummaryService] failed to invoke Lambda:', err.message);
+      }
+    } else {
+      // Fallback for local dev (no Lambda): run synchronously
+      this.generateAndCacheSummary(comment).catch(err =>
+        console.error('[ReasoningSummaryService] local background generation failed:', err)
+      );
+    }
 
     // Return null → caller sends 202
     return null;

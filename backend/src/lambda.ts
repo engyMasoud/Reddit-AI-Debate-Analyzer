@@ -1,5 +1,5 @@
 import serverless from 'serverless-http';
-import { app } from './app';
+import { app, reasoningSummaryService } from './app';
 import { pool } from './config/database';
 import fs from 'fs';
 import path from 'path';
@@ -36,5 +36,24 @@ const _serverlessHandler = serverless(app);
 
 export const handler = async (event: any, context: any) => {
   await migrationPromise;
+
+  // ── Background job: generate reasoning summary ──
+  if (event?.type === 'generate_reasoning_summary') {
+    const { commentId, commentText, commentPostId } = event;
+    console.log(`[lambda] background: generating reasoning summary for comment ${commentId}`);
+    try {
+      await reasoningSummaryService.generateAndCacheSummary({
+        id: commentId,
+        text: commentText,
+        postId: commentPostId,
+      } as any);
+      console.log(`[lambda] background: summary saved for comment ${commentId}`);
+    } catch (err: any) {
+      console.error(`[lambda] background: failed to generate summary for comment ${commentId}:`, err.message);
+    }
+    return;
+  }
+
+  // ── Normal HTTP request ──
   return _serverlessHandler(event, context);
 };

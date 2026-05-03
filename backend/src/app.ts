@@ -106,4 +106,4 @@ app.get('/api/health', (_req, res) => {
 // Error handler
 app.use(errorHandler);
 
-export { app, cacheService };
+export { app, cacheService, reasoningSummaryService };
