@@ -107,6 +107,37 @@ button:focus:not(:focus-visible) {
   color: #94a3b8;
 }
 
+/* ── Form-control fixes ──────────────────────────────────────────────
+   1. Force text color so inputs/textareas don't inherit the body's
+      light dark-mode color (#e8eef5) on top of their own white bg.
+   2. Set font-size to 16px on small screens to stop iOS Safari from
+      auto-zooming when an input gets focus. */
+input,
+textarea,
+select {
+  color: #0f172a;
+}
+
+body.dark input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+body.dark textarea,
+body.dark select {
+  color: #f1f5f9;
+  background-color: #1f2937;
+}
+
+body.dark input::placeholder,
+body.dark textarea::placeholder {
+  color: #94a3b8;
+}
+
+@media (max-width: 640px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 /* Smooth transitions */
 button,
 a {

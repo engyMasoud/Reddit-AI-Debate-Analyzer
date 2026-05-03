@@ -259,7 +259,12 @@ export const RedditProvider = ({ children }) => {
     if (initRef.current) return;
     initRef.current = true;
 
+    // Defer the global 401 handler until after bootstrap completes so a
+    // transient cold-start 401 on /posts or /subreddits doesn't log the
+    // user out on page refresh.
+    let bootstrapDone = false;
     setOnAuthFailure(() => {
+      if (!bootstrapDone) return;
       clearToken();
       setUser(null);
       setIsAuthenticated(false);
@@ -267,19 +272,39 @@ export const RedditProvider = ({ children }) => {
     });
 
     (async () => {
+      const storedToken = loadToken();
+      if (!storedToken) {
+        bootstrapDone = true;
+        setAuthLoading(false);
+        return;
+      }
+
+      // Step 1: validate the stored token. Only THIS failure clears the
+      // session — a transient /posts or /subreddits hiccup must not log
+      // the user out on refresh.
+      let me;
       try {
-        const storedToken = loadToken();
-        if (storedToken) {
-          const { user: u } = await apiFetchMe();
-          setUser(normalizeUser(u));
-          setUserJoinedSubreddits(u.joinedSubreddits || []);
-          setIsAuthenticated(true);
-          await fetchInitialData();
-        }
+        me = await apiFetchMe();
       } catch (err) {
-        console.error('Session restore failed:', err);
+        console.error('Session restore failed (token invalid):', err);
         clearToken();
+        bootstrapDone = true;
+        setAuthLoading(false);
+        return;
+      }
+
+      const u = me.user;
+      setUser(normalizeUser(u));
+      setUserJoinedSubreddits(u.joinedSubreddits || []);
+      setIsAuthenticated(true);
+
+      // Step 2: hydrate initial data. Failure here keeps the user logged in.
+      try {
+        await fetchInitialData();
+      } catch (err) {
+        console.error('Initial data load failed (continuing logged in):', err);
       } finally {
+        bootstrapDone = true;
         setAuthLoading(false);
       }
     })();
