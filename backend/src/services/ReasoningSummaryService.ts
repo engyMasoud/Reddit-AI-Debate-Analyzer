@@ -41,25 +41,27 @@ export class ReasoningSummaryService implements IReasoningSummaryService {
     }
 
     // 5. Kick off background generation via async Lambda self-invocation.
-    //    InvocationType: 'Event' returns immediately — no API Gateway 29s limit applies.
+    //    InvocationType: 'Event' returns in <1s (just confirms enqueue) — safe to await.
+    //    We MUST await (not fire-and-forget) so the SDK HTTP call completes before the
+    //    Lambda container freezes when the outer async handler returns.
     const functionName = process.env.AWS_LAMBDA_FUNCTION_NAME;
     if (functionName) {
-      // Fire-and-forget: do NOT await — the HTTP response must return immediately
-      const client = new LambdaClient({ requestHandler: { requestTimeout: 5000 } as any });
-      client.send(new InvokeCommand({
-        FunctionName: functionName,
-        InvocationType: 'Event', // fire-and-forget
-        Payload: Buffer.from(JSON.stringify({
-          type: 'generate_reasoning_summary',
-          commentId: comment.id,
-          commentText: comment.text,
-          commentPostId: comment.postId,
-        })),
-      })).then(() => {
-        console.log(`[ReasoningSummaryService] async invocation triggered for comment ${comment.id}`);
-      }).catch((err: any) => {
-        console.error('[ReasoningSummaryService] failed to invoke Lambda:', err.message);
-      });
+      try {
+        const client = new LambdaClient({});
+        await client.send(new InvokeCommand({
+          FunctionName: functionName,
+          InvocationType: 'Event', // async: Lambda API returns 202 immediately after enqueueing
+          Payload: Buffer.from(JSON.stringify({
+            type: 'generate_reasoning_summary',
+            commentId: comment.id,
+            commentText: comment.text,
+            commentPostId: comment.postId,
+          })),
+        }));
+        console.log(`[ReasoningSummaryService] background invocation enqueued for comment ${comment.id}`);
+      } catch (err: any) {
+        console.error(`[ReasoningSummaryService] failed to invoke Lambda (code=${err.Code ?? err.code}):`, err.message);
+      }
     } else {
       // Fallback for local dev (no Lambda): run synchronously
       this.generateAndCacheSummary(comment).catch(err =>
