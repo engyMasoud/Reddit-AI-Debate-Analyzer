@@ -44,22 +44,22 @@ export class ReasoningSummaryService implements IReasoningSummaryService {
     //    InvocationType: 'Event' returns immediately — no API Gateway 29s limit applies.
     const functionName = process.env.AWS_LAMBDA_FUNCTION_NAME;
     if (functionName) {
-      try {
-        const client = new LambdaClient({});
-        await client.send(new InvokeCommand({
-          FunctionName: functionName,
-          InvocationType: 'Event', // fire-and-forget
-          Payload: Buffer.from(JSON.stringify({
-            type: 'generate_reasoning_summary',
-            commentId: comment.id,
-            commentText: comment.text,
-            commentPostId: comment.postId,
-          })),
-        }));
+      // Fire-and-forget: do NOT await — the HTTP response must return immediately
+      const client = new LambdaClient({ requestHandler: { requestTimeout: 5000 } as any });
+      client.send(new InvokeCommand({
+        FunctionName: functionName,
+        InvocationType: 'Event', // fire-and-forget
+        Payload: Buffer.from(JSON.stringify({
+          type: 'generate_reasoning_summary',
+          commentId: comment.id,
+          commentText: comment.text,
+          commentPostId: comment.postId,
+        })),
+      })).then(() => {
         console.log(`[ReasoningSummaryService] async invocation triggered for comment ${comment.id}`);
-      } catch (err: any) {
+      }).catch((err: any) => {
         console.error('[ReasoningSummaryService] failed to invoke Lambda:', err.message);
-      }
+      });
     } else {
       // Fallback for local dev (no Lambda): run synchronously
       this.generateAndCacheSummary(comment).catch(err =>
