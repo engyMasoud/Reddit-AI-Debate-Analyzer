@@ -68,6 +68,16 @@ jobs:
             > /tmp/lambda-config.json
           aws lambda update-function-configuration \
             --cli-input-json file:///tmp/lambda-config.json
+          aws lambda wait function-updated \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }}
+
+      - name: Remove Lambda from VPC (enable internet egress for OpenAI)
+        run: |
+          aws lambda update-function-configuration \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --vpc-config SubnetIds=[],SecurityGroupIds=[]
+          aws lambda wait function-updated \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }}
 
       - name: Grant Lambda self-invocation permission
         run: |
