@@ -28,14 +28,23 @@ async function runMigrationsOnce() {
   }
 }
 
-const migrationPromise = runMigrationsOnce().catch(err =>
-  console.error('[lambda] migration run failed:', err.message)
-);
+let migrationsComplete = false;
+let migrationsRunning = false;
+const migrationPromise = runMigrationsOnce()
+  .then(() => { migrationsComplete = true; })
+  .catch(err => {
+    console.error('[lambda] migration run failed:', err.message);
+    migrationsComplete = true; // don't block forever on error
+  });
 
 const _serverlessHandler = serverless(app);
 
 export const handler = async (event: any, context: any) => {
-  await migrationPromise;
+  // Only await migrations for background jobs; HTTP requests proceed immediately.
+  // Migrations run idempotently, so warm-start requests are unaffected.
+  if (event?.type === 'generate_reasoning_summary') {
+    await migrationPromise;
+  }
 
   // ── Background job: generate reasoning summary ──
   if (event?.type === 'generate_reasoning_summary') {
