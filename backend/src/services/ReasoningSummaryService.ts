@@ -41,11 +41,15 @@ export class ReasoningSummaryService implements IReasoningSummaryService {
     }
 
     // 5. Kick off background generation via async Lambda self-invocation.
-    //    InvocationType: 'Event' returns in <1s (just confirms enqueue) — safe to await.
-    //    We MUST await (not fire-and-forget) so the SDK HTTP call completes before the
-    //    Lambda container freezes when the outer async handler returns.
+    //    InvocationType: 'Event' enqueues the job and returns ~202 in <1s.
+    //    We await with a 5s AbortController timeout so the HTTP request is actually
+    //    dispatched before the handler returns (fire-and-forget Promises are suspended
+    //    when the async Lambda handler resolves), while bounding the delay if the
+    //    Lambda service endpoint is unreachable from this VPC.
     const functionName = process.env.AWS_LAMBDA_FUNCTION_NAME;
     if (functionName) {
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), 5000);
       try {
         const client = new LambdaClient({});
         await client.send(new InvokeCommand({
@@ -57,10 +61,15 @@ export class ReasoningSummaryService implements IReasoningSummaryService {
             commentText: comment.text,
             commentPostId: comment.postId,
           })),
-        }));
+        }), { abortSignal: ac.signal });
         console.log(`[ReasoningSummaryService] background invocation enqueued for comment ${comment.id}`);
       } catch (err: any) {
-        console.error(`[ReasoningSummaryService] failed to invoke Lambda (code=${err.Code ?? err.code}):`, err.message);
+        console.error(
+          `[ReasoningSummaryService] Lambda invoke failed — ` +
+          `name=${err.name} code=${err.Code ?? err.code} msg=${err.message}`
+        );
+      } finally {
+        clearTimeout(timer);
       }
     } else {
       // Fallback for local dev (no Lambda): run synchronously
