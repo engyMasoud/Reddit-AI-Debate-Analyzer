@@ -19,6 +19,7 @@ import {
   joinSubredditApi,
   getComposerSocket,
   disconnectComposerSocket,
+  analyzeDraftRest,
   fetchNotifications as apiFetchNotifications,
   fetchUnreadCount as apiFetchUnreadCount,
   markNotificationRead as apiMarkNotifRead,
@@ -624,8 +625,8 @@ export const RedditProvider = ({ children }) => {
     return !!expandedSummaries[commentId];
   }, [expandedSummaries]);
 
-  // DS3-US3: Analyze draft text via Socket.IO
-  const analyzeDraft = useCallback((draftText, postId) => {
+  // DS3-US3: Analyze draft text via Socket.IO with REST fallback
+  const analyzeDraft = useCallback(async (draftText, postId) => {
     if (!draftText || draftText.trim().length < 10) {
       setDraftFeedback(null);
       return;
@@ -636,11 +637,19 @@ export const RedditProvider = ({ children }) => {
     const socket = socketRef.current;
     if (socket && socket.connected) {
       socket.emit('draft:analyze', { draftText, contextId: postId });
-    } else {
-      // Fallback: try reconnecting
-      const newSocket = getComposerSocket();
-      socketRef.current = newSocket;
-      newSocket.emit('draft:analyze', { draftText, contextId: postId });
+      return;
+    }
+
+    // Socket not connected (e.g. serverless/Lambda deployment with no WebSocket support).
+    // Fall back to the synchronous REST endpoint.
+    try {
+      const result = await analyzeDraftRest(draftText);
+      setDraftFeedback(result);
+    } catch (err) {
+      console.error('Draft analysis failed:', err);
+      throw err;
+    } finally {
+      setFeedbackLoading(false);
     }
   }, []);
 
