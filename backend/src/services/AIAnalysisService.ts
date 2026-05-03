@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { IAIAnalysisService } from './interfaces/IAIAnalysisService';
+import { IAIAnalysisService, CommentAnalysis } from './interfaces/IAIAnalysisService';
 import { Claim } from '../models/Claim';
 import { EvidenceBlock } from '../models/EvidenceBlock';
 import { AnalysisResult } from '../models/AnalysisResult';
@@ -223,6 +223,64 @@ Coherence Score: ${analysis.coherenceScore}`,
       response.choices[0]?.message?.content ||
       'Unable to generate summary at this time.'
     );
+  }
+
+  async analyzeCommentFull(text: string): Promise<CommentAnalysis> {
+    const response = await this.client.chat.completions.create({
+      model: this.model,
+      messages: [
+        {
+          role: 'system',
+          content: `Analyze a debate comment and return ONLY JSON (no markdown):
+{"claims":[{"id":1,"text":"<claim>","supportingEvidence":["type"]}],"evidence":[{"type":"study|data|anecdote|authority|other","content":"<desc>","strength":"high|medium|low"}],"coherenceScore":<0-1>,"summary":"<1-2 sentence neutral summary>"}
+Max 2 claims, max 3 evidence items. coherenceScore 0=incoherent 1=perfect.`,
+        },
+        {
+          role: 'user',
+          content: `Analyze: "${text.substring(0, 600)}"`,
+        },
+      ],
+      temperature: 0.3,
+      max_tokens: 400,
+    }, { timeout: 20000 });
+
+    try {
+      const raw = (response.choices[0]?.message?.content || '').replace(/```json?|```/g, '').trim();
+      const parsed = JSON.parse(raw);
+
+      const claims: Claim[] = Array.isArray(parsed.claims)
+        ? parsed.claims.map((c: any, i: number) => ({
+            id: c.id ?? i + 1,
+            text: c.text || '',
+            supportingEvidence: Array.isArray(c.supportingEvidence) ? c.supportingEvidence : [],
+          }))
+        : [{ id: 1, text: text.substring(0, 80), supportingEvidence: [] }];
+
+      const evidence: EvidenceBlock[] = Array.isArray(parsed.evidence)
+        ? parsed.evidence.map((e: any) => ({
+            type: (['study', 'data', 'anecdote', 'authority', 'other'] as const).includes(e.type) ? e.type : 'other',
+            content: e.content || '',
+            strength: (['high', 'medium', 'low'] as const).includes(e.strength) ? e.strength : 'low',
+          }))
+        : [{ type: 'anecdote', content: 'Analysis unavailable', strength: 'low' }];
+
+      const coherenceScore = typeof parsed.coherenceScore === 'number'
+        ? Math.min(1, Math.max(0, parsed.coherenceScore))
+        : 0.5;
+
+      const summary = typeof parsed.summary === 'string' && parsed.summary.length > 0
+        ? parsed.summary
+        : 'Analysis could not be summarized.';
+
+      return { claims, evidence, coherenceScore, summary };
+    } catch {
+      return {
+        claims: [{ id: 1, text: text.substring(0, 80), supportingEvidence: [] }],
+        evidence: [{ type: 'anecdote', content: 'Analysis unavailable', strength: 'low' }],
+        coherenceScore: 0.5,
+        summary: 'Analysis could not be completed.',
+      };
+    }
   }
 
   async scoreDraft(text: string, context?: string): Promise<FeedbackResult | null> {

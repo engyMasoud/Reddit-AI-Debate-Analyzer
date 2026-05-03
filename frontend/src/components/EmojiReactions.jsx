@@ -1,6 +1,6 @@
 import { useContext, useState, useEffect, useRef } from 'react';
 import { RedditContext } from '../context/RedditContext';
-import { Smile, AlertCircle } from 'lucide-react';
+import { Smile } from 'lucide-react';
 import { fetchEmojiReactions } from '../api';
 
 const EMOJI_PICKER = ['👍', '😂', '😮', '❤️', '😢', '🔥', '👏', '💯'];
@@ -10,7 +10,6 @@ export default function EmojiReactions({ targetType, targetId, reactions = [] })
   const [showPicker, setShowPicker] = useState(false);
   const [currentReactions, setCurrentReactions] = useState(reactions);
   const [isLoading, setIsLoading] = useState(false);
-  const [loadError, setLoadError] = useState(null);
   const pickerRef = useRef(null);
 
   // Fetch reactions when component mounts or targetId changes
@@ -18,19 +17,15 @@ export default function EmojiReactions({ targetType, targetId, reactions = [] })
     const key = `${targetType}-${targetId}`;
     if (emojiReactions[key]) {
       setCurrentReactions(emojiReactions[key]);
-      setLoadError(null);
     } else if (!reactions.length) {
       // Only fetch if no reactions provided and not already in context
       setIsLoading(true);
-      setLoadError(null);
       fetchEmojiReactions(targetType, targetId)
         .then(data => {
           setCurrentReactions(data);
-          setLoadError(null);
         })
-        .catch(err => {
-          console.error('Failed to fetch emoji reactions:', err);
-          setLoadError('Failed to load reactions');
+        .catch(() => {
+          // Silently ignore — emoji reactions are non-critical
           setCurrentReactions([]);
         })
         .finally(() => setIsLoading(false));
@@ -78,14 +73,6 @@ export default function EmojiReactions({ targetType, targetId, reactions = [] })
 
   return (
     <div className="flex items-center gap-1 flex-wrap">
-      {/* Error state */}
-      {loadError && (
-        <div className="flex items-center gap-1 text-xs text-red-600 bg-red-50 px-2 py-1 rounded-full">
-          <AlertCircle size={12} />
-          <span>{loadError}</span>
-        </div>
-      )}
-
       {/* Loading state */}
       {isLoading && (
         <div className="text-xs text-gray-500 px-2 py-1">Loading...</div>

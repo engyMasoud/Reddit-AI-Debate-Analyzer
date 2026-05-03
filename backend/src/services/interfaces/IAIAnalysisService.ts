@@ -3,11 +3,23 @@ import { EvidenceBlock } from '../../models/EvidenceBlock';
 import { AnalysisResult } from '../../models/AnalysisResult';
 import { FeedbackResult } from '../../models/FeedbackResult';
 
+export interface CommentAnalysis {
+  claims: Claim[];
+  evidence: EvidenceBlock[];
+  coherenceScore: number;
+  summary: string;
+}
+
 export interface IAIAnalysisService {
   extractClaims(text: string): Promise<Claim[]>;
   extractEvidence(text: string): Promise<EvidenceBlock[]>;
   evaluateCoherence(claims: Claim[], evidence: EvidenceBlock[]): Promise<number>;
   generateSummary(analysis: AnalysisResult): Promise<string>;
+  /**
+   * Single-call replacement for extractClaims + extractEvidence +
+   * evaluateCoherence + generateSummary. Drastically reduces latency.
+   */
+  analyzeCommentFull(text: string): Promise<CommentAnalysis>;
   /**
    * Holistic draft scoring via a single LLM call.
    * Returns a FeedbackResult with score, issues, suggestions, and goodPoints.

@@ -79,7 +79,7 @@ const writingFeedbackService = new WritingFeedbackService(
   aiService, cacheService, feedbackLogRepo
 );
 const reasoningSummaryService = new ReasoningSummaryService(
-  aiService, cacheService, commentRepo, summaryRepo, pool, writingFeedbackService
+  aiService, cacheService, commentRepo, summaryRepo
 );
 
 // ── Controllers ──

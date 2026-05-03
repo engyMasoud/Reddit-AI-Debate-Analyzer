@@ -1,4 +1,4 @@
-import { IAIAnalysisService } from './interfaces/IAIAnalysisService';
+import { IAIAnalysisService, CommentAnalysis } from './interfaces/IAIAnalysisService';
 import { Claim } from '../models/Claim';
 import { EvidenceBlock } from '../models/EvidenceBlock';
 import { AnalysisResult } from '../models/AnalysisResult';
@@ -42,5 +42,14 @@ export class MockAIAnalysisService implements IAIAnalysisService {
   /** Mock scoreDraft — returns null so WritingFeedbackService uses regex pipeline. */
   async scoreDraft(_text: string, _context?: string): Promise<FeedbackResult | null> {
     return null;
+  }
+
+  async analyzeCommentFull(text: string): Promise<CommentAnalysis> {
+    return {
+      claims: [{ id: 1, text: text.substring(0, 60), supportingEvidence: ['mock-ev-1'] }],
+      evidence: [{ type: 'anecdote', content: 'Mock evidence', strength: 'medium' }],
+      coherenceScore: 0.75,
+      summary: `Mock summary: Argues "${text.substring(0, 50)}" with 1 piece of evidence.`,
+    };
   }
 }

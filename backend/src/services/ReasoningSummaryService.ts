@@ -6,8 +6,6 @@ import { ReasoningSummaryRepository } from '../repositories/ReasoningSummaryRepo
 import { ReasoningSummaryDTO, ReasoningSummaryRow } from '../models/ReasoningSummary';
 import { Comment } from '../models/Comment';
 import { env } from '../config/env';
-import { WritingFeedbackService } from './WritingFeedbackService';
-import { Pool } from 'pg';
 
 export class ReasoningSummaryService implements IReasoningSummaryService {
   constructor(
@@ -15,8 +13,6 @@ export class ReasoningSummaryService implements IReasoningSummaryService {
     private cache: ICacheService,
     private commentRepo: CommentRepository,
     private summaryRepo: ReasoningSummaryRepository,
-    private pool?: Pool,
-    private writingFeedbackService?: WritingFeedbackService,
   ) {}
 
   async getSummary(commentId: number): Promise<ReasoningSummaryDTO> {
@@ -49,51 +45,16 @@ export class ReasoningSummaryService implements IReasoningSummaryService {
   async generateAndCacheSummary(comment: Comment): Promise<ReasoningSummaryDTO> {
     const cacheKey = `reasoning_summary:${comment.id}`;
 
-    const [claims, evidence] = await Promise.all([
-      this.aiService.extractClaims(comment.text),
-      this.aiService.extractEvidence(comment.text),
-    ]);
-    let coherenceScore = await this.aiService.evaluateCoherence(claims, evidence);
-    
-    // CRITICAL: Also detect issues to align final score with live feedback
-    // Get post context for relevance check
-    let postContext = '';
-    if (this.pool) {
-      try {
-        const result = await this.pool.query(
-          'SELECT title, content FROM posts WHERE id = $1',
-          [comment.postId]
-        );
-        postContext = result.rows?.[0] ? `${result.rows[0].title} ${result.rows[0].content}` : '';
-      } catch (err) {
-        console.warn('Could not fetch post context for relevance check:', err);
-      }
-    }
-
-    // Apply blended scoring if WritingFeedbackService is available
-    let finalScore = coherenceScore;
-    if (this.writingFeedbackService) {
-      try {
-        const feedback = await this.writingFeedbackService.analyzeDraft(comment.text, postContext);
-        // Use the blended score from WritingFeedbackService
-        finalScore = feedback.score;
-      } catch (err) {
-        console.warn('Could not run WritingFeedbackService analysis for final score:', err);
-        // Fall back to just coherence score
-        finalScore = coherenceScore;
-      }
-    }
-
-    const summary = await this.aiService.generateSummary({ claims, evidence, coherenceScore });
-
-    const primaryClaim = claims[0]?.text ?? 'No primary claim identified';
+    // Single consolidated AI call instead of 5 separate ones — stays under 29s
+    const analysis = await this.aiService.analyzeCommentFull(comment.text);
+    const { claims, evidence, coherenceScore, summary } = analysis;
 
     const row = await this.summaryRepo.upsert({
       commentId: comment.id,
       summary,
-      primaryClaim,
+      primaryClaim: claims[0]?.text ?? 'No primary claim identified',
       evidenceBlocks: evidence,
-      coherenceScore: finalScore, // Use blended score for final display
+      coherenceScore,
     });
 
     const dto = this.buildDTO(row);
